@@ -2,10 +2,12 @@
 jQuery(document).ready(function($) {
     let isLoading = false;
     let progressInterval;
-    let updateTimer;
-    const UPDATE_INTERVAL = 30000; // 30 seconds
 
-    // Server status update
+    // Initialize projects
+    function initDashboard() {
+        updateServerStatus(true);
+    }
+
     function updateServerStatus(showProgress = true) {
         if (isLoading) return;
         isLoading = true;
@@ -24,7 +26,6 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response.success) {
                     updateDashboard(response.data);
-                    updateLastUpdateTime();
                     hideError();
                 } else {
                     const errorMsg = response.data ? response.data.message : 'Failed to fetch server data';
@@ -50,39 +51,99 @@ jQuery(document).ready(function($) {
         });
     }
 
+    function updateDashboard(data) {
+        const servers = data.servers || [];
+        const defaultProject = 'Default Project';
+        
+        // Group servers by project (for now, all in default project)
+        const projectServers = {
+            [defaultProject]: servers
+        };
+
+        // Clear existing projects
+        $('.projects-container').empty();
+
+        // Create project cards
+        Object.entries(projectServers).forEach(([projectName, projectServers]) => {
+            const projectCard = createProjectCard(projectName, projectServers);
+            $('.projects-container').append(projectCard);
+        });
+    }
+
+    function createProjectCard(projectName, servers) {
+        const template = document.getElementById('project-template');
+        const card = $(template.content.cloneNode(true));
+        
+        card.find('.project-name').text(projectName);
+        
+        // Add servers to project
+        const serversGrid = card.find('.servers-grid');
+        servers.forEach(server => {
+            const serverCard = createServerCard(server);
+            serversGrid.append(serverCard);
+        });
+
+        return card;
+    }
+
+    function createServerCard(server) {
+        const template = document.getElementById('server-template');
+        const card = $(template.content.cloneNode(true));
+
+        // Calculate server age
+        const createdDate = new Date(server.created);
+        const now = new Date();
+        const ageInDays = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24));
+        const age = formatAge(ageInDays);
+
+        // Update card content
+        card.find('.server-name').text(server.name);
+        card.find('.server-status')
+            .addClass(server.status)
+            .attr('title', server.status);
+        card.find('.ip-address').text(server.public_net.ipv4.ip);
+        card.find('.created-date').text(createdDate.toLocaleDateString());
+        card.find('.server-age').text(age);
+
+        // Set power button icon based on status
+        const powerButton = card.find('.power-action .dashicons');
+        powerButton.addClass(server.status === 'running' ? 'dashicons-power-off' : 'dashicons-power-on');
+
+        return card;
+    }
+
+    function formatAge(days) {
+        if (days < 1) return 'Today';
+        if (days < 30) return days + ' days';
+        
+        const months = Math.floor(days / 30);
+        if (months < 12) return months + ' months';
+        
+        const years = Math.floor(months / 12);
+        const remainingMonths = months % 12;
+        return years + ' years' + (remainingMonths ? ', ' + remainingMonths + ' months' : '');
+    }
+
     // Loading Progress
     function startLoadingProgress() {
         const progress = $('#loading-progress');
-        const progressValue = progress.find('.progress-value');
-        let width = 0;
-
-        progress.addClass('active');
-        progressValue.css('width', '0%');
-
-        progressInterval = setInterval(function() {
-            if (width >= 90) {
-                clearInterval(progressInterval);
-                return;
-            }
-            width += (90 - width) * 0.1;
-            progressValue.css('width', width + '%');
-        }, 100);
+        progress.show();
+        animateProgress();
     }
 
     function stopLoadingProgress() {
         const progress = $('#loading-progress');
-        const progressValue = progress.find('.progress-value');
-
-        clearInterval(progressInterval);
-        progressValue.css('width', '100%');
-
-        setTimeout(function() {
-            progress.removeClass('active');
-            progressValue.css('width', '0%');
-        }, 300);
+        progress.hide();
+        $('.progress-value').css('width', '0%');
     }
 
-    // Show error message
+    function animateProgress() {
+        const progressBar = $('.progress-value');
+        progressBar.css('width', '0%');
+        progressBar.animate({ width: '100%' }, 1000);
+    }
+
+    // Error Handling
     function showError(message = 'An unexpected error occurred') {
         if (!message || message === '') {
             message = 'An unexpected error occurred';
@@ -101,298 +162,26 @@ jQuery(document).ready(function($) {
         $('.kloudpanel-dashboard').prepend(errorHtml);
     }
 
-    // Update last update time
-    function updateLastUpdateTime() {
-        const now = new Date();
-        const timeString = now.toLocaleTimeString();
-        $('#last-update-time').text(timeString);
-    }
-
-    // Update dashboard with server data
-    function updateDashboard(servers) {
-        const grid = $('#servers-grid');
-        const noServers = $('#no-servers');
-        grid.empty();
-        
-        if (!servers || servers.length === 0) {
-            grid.hide();
-            noServers.show();
-            updateSummaryCards(0, 0, 0);
-            return;
-        }
-
-        noServers.hide();
-        grid.show();
-        
-        let runningServers = 0;
-        let totalCost = 0;
-        
-        servers.forEach(function(server) {
-            const card = createServerCard(server);
-            grid.append(card);
-            
-            if (server.status === 'running') {
-                runningServers++;
-                totalCost += parseFloat(server.price_hourly || 0);
-            }
-        });
-        
-        updateSummaryCards(servers.length, runningServers, totalCost);
-    }
-
-    // Update summary cards
-    function updateSummaryCards(total, running, cost) {
-        $('#total-servers').text(total);
-        $('#running-servers').text(running);
-        $('#total-cost').text('€' + cost.toFixed(2));
-    }
-
-    // Create server card from template
-    function createServerCard(server) {
-        const template = document.getElementById('server-card-template');
-        const card = $(template.content.cloneNode(true));
-        
-        // Update basic info
-        card.find('.server-name').text(server.name);
-        card.find('.server-status')
-            .text(server.status)
-            .addClass(server.status);
-        card.find('.ip').text(server.ip);
-        card.find('.type').text(server.type);
-        card.find('.datacenter').text(server.datacenter);
-        
-        // Update metrics if available
-        if (server.metrics) {
-            updateMetrics(card, server.metrics);
-        }
-        
-        // Setup action buttons
-        setupActionButtons(card, server);
-        
-        return card;
-    }
-
-    // Update server metrics
-    function updateMetrics(card, metrics) {
-        updateResourceBar(card, '.cpu-usage', '.cpu-value', metrics.cpu);
-        updateResourceBar(card, '.memory-usage', '.memory-value', metrics.memory);
-        updateResourceBar(card, '.disk-usage', '.disk-value', metrics.disk);
-    }
-
-    // Update resource usage bar
-    function updateResourceBar(card, barSelector, valueSelector, value) {
-        const percentage = Math.round(value * 100);
-        const bar = card.find(barSelector);
-        const valueElement = card.find(valueSelector);
-        
-        bar.css('width', percentage + '%')
-           .removeClass('low medium high')
-           .addClass(getResourceClass(percentage));
-           
-        valueElement.text(percentage + '%');
-    }
-
-    // Get resource usage class based on percentage
-    function getResourceClass(percentage) {
-        if (percentage < 50) return 'low';
-        if (percentage < 80) return 'medium';
-        return 'high';
-    }
-
-    // Setup server action buttons
-    function setupActionButtons(card, server) {
-        const consoleBtn = card.find('.console-btn');
-        const powerBtn = card.find('.power-btn');
-        
-        consoleBtn.attr('href', `https://console.hetzner.cloud/projects/${server.project_id}/servers/${server.id}/console`)
-                 .attr('target', '_blank');
-        
-        powerBtn.html(`<span class="dashicons dashicons-${server.status === 'running' ? 'power-off' : 'power-on'}"></span>`)
-                .addClass(server.status === 'running' ? 'button-secondary' : 'button-primary');
-                
-        powerBtn.on('click', function(e) {
-            e.preventDefault();
-            toggleServerPower(server.id, server.status);
-        });
-    }
-
-    // Toggle server power state
-    function toggleServerPower(serverId, currentStatus) {
-        const action = currentStatus === 'running' ? 'poweroff' : 'poweron';
-        
-        $.ajax({
-            url: kloudpanel.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'toggle_server_power',
-                nonce: kloudpanel.nonce,
-                server_id: serverId,
-                power_action: action
-            },
-            success: function(response) {
-                if (response.success) {
-                    updateServerStatus();
-                } else {
-                    showError('Failed to change server power state: ' + response.data);
-                }
-            }
-        });
-    }
-
-    // Manual refresh button
-    $('#refresh-dashboard').on('click', function() {
-        updateServerStatus(true);
-    });
-
-    // Initialize dashboard updates
-    if ($('#servers-grid').length) {
-        updateServerStatus(true);
-        setInterval(function() {
-            updateServerStatus(false);
-        }, 30000);
-    }
-
-    function initDashboard() {
-        updateServerData();
-        startAutoUpdate();
-
-        $('#refresh-dashboard').on('click', function() {
-            updateServerData(true);
-        });
-    }
-
-    function startAutoUpdate() {
-        if (updateTimer) {
-            clearInterval(updateTimer);
-        }
-        updateTimer = setInterval(updateServerData, UPDATE_INTERVAL);
-    }
-
-    function updateServerData(showProgress = false) {
-        if (showProgress) {
-            showLoadingProgress();
-        }
-
-        $.ajax({
-            url: kloudpanel.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'get_servers_data',
-                nonce: kloudpanel.nonce
-            },
-            success: function(response) {
-                if (response.success) {
-                    updateDashboard(response.data);
-                    updateLastUpdateTime();
-                    hideError();
-                } else {
-                    showError(response.data.message || 'Failed to fetch server data');
-                }
-            },
-            error: function(xhr, status, error) {
-                console.error('Ajax error:', error);
-                console.error('Status:', status);
-                console.error('Response:', xhr.responseText);
-                showError('Failed to connect to the server. Please check the browser console and WordPress debug log for details.');
-            },
-            complete: function() {
-                if (showProgress) {
-                    hideLoadingProgress();
-                }
-            }
-        });
-    }
-
-    function updateDashboard(data) {
-        const { servers, summary } = data;
-        updateSummaryCards(summary);
-        updateServersGrid(servers);
-        fetchServerMetrics(servers);
-    }
-
-    function fetchServerMetrics(servers) {
-        servers.forEach(server => {
-            if (server.status === 'running') {
-                $.ajax({
-                    url: kloudpanel.ajax_url,
-                    type: 'POST',
-                    data: {
-                        action: 'get_server_metrics',
-                        server_id: server.id,
-                        nonce: kloudpanel.nonce
-                    },
-                    success: function(response) {
-                        if (response.success && response.data.metrics) {
-                            updateServerMetrics(server.id, response.data.metrics);
-                        } else {
-                            console.error('Failed to fetch metrics:', response.data?.message || 'Unknown error');
-                        }
-                    },
-                    error: function(xhr, status, error) {
-                        console.error('Error fetching metrics:', error);
-                    }
-                });
-            } else {
-                // Server not running, show 0% for all metrics
-                updateServerMetrics(server.id, { cpu: 0, memory: 0, disk: 0 });
-            }
-        });
-    }
-
-    function updateServerMetrics(serverId, metrics) {
-        const card = $(`#server-${serverId}`);
-        if (!card.length) return;
-
-        // Helper function to update metric display
-        function updateMetric(type, value) {
-            const formattedValue = Math.min(Math.max(value || 0, 0), 100).toFixed(1);
-            card.find(`.${type}-usage`).text(formattedValue + '%');
-            card.find(`.${type}-progress`)
-                .css('width', formattedValue + '%')
-                .toggleClass('high', formattedValue > 80)
-                .toggleClass('medium', formattedValue > 60 && formattedValue <= 80)
-                .toggleClass('low', formattedValue <= 60);
-        }
-
-        // Update each metric
-        updateMetric('cpu', metrics.cpu);
-        updateMetric('memory', metrics.memory);
-        updateMetric('disk', metrics.disk);
-    }
-
-    function calculateMetricValue(metricData) {
-        if (!metricData || !metricData.values || !metricData.values.length) {
-            return 0;
-        }
-
-        // Get the latest value
-        const latestValue = metricData.values[metricData.values.length - 1];
-        
-        // Convert to percentage and round to 2 decimal places
-        return Math.round(latestValue * 100) / 100;
-    }
-
-    function showLoadingProgress() {
-        $('#loading-progress').show();
-        animateProgress();
-    }
-
-    function hideLoadingProgress() {
-        $('#loading-progress').hide();
-        $('.progress-value').css('width', '0%');
-    }
-
-    function animateProgress() {
-        const progressBar = $('.progress-value');
-        progressBar.css('width', '0%');
-        progressBar.animate({ width: '100%' }, 1000);
-    }
-
     function hideError() {
         $('.kloudpanel-dashboard .notice').fadeOut(300, function() {
             $(this).remove();
         });
     }
+
+    // Project Modal
+    $('#add-project').on('click', function() {
+        $('#project-modal').fadeIn();
+    });
+
+    $('.modal-close').on('click', function() {
+        $(this).closest('.modal').fadeOut();
+    });
+
+    $(window).on('click', function(e) {
+        if ($(e.target).hasClass('modal')) {
+            $('.modal').fadeOut();
+        }
+    });
 
     // Initialize dashboard if we're on the dashboard page
     if ($('.kloudpanel-dashboard').length) {

@@ -1,160 +1,96 @@
 <?php
-if (!defined('ABSPATH')) {
-    exit;
-}
+if (!defined('ABSPATH')) exit;
 ?>
 <div class="wrap kloudpanel-dashboard">
     <div class="dashboard-header">
-        <h1>Hetzner Cloud Dashboard</h1>
-        <div class="refresh-info">
-            <span class="last-update">Last updated: <span id="last-update-time">Just now</span></span>
-            <button id="refresh-dashboard" class="button button-secondary">
-                <span class="dashicons dashicons-update"></span> Refresh
-            </button>
+        <h1>KloudPanel Dashboard</h1>
+        <div class="dashboard-actions">
+            <button id="add-project" class="button button-primary">Add Project</button>
+            <button id="refresh-dashboard" class="button"><span class="dashicons dashicons-update"></span> Refresh</button>
         </div>
     </div>
 
-    <!-- Loading Progress -->
-    <div id="loading-progress" class="loading-progress">
-        <div class="progress-bar">
-            <div class="progress-value"></div>
-        </div>
-        <div class="progress-text">Loading server data...</div>
+    <div id="loading-progress" class="progress-bar">
+        <div class="progress-value"></div>
     </div>
-    
-    <div class="dashboard-grid">
-        <!-- Summary Cards -->
-        <div class="summary-section">
-            <div class="summary-cards">
-                <div class="summary-card total-servers">
-                    <div class="card-icon">
-                        <span class="dashicons dashicons-cloud"></span>
-                    </div>
-                    <div class="card-content">
-                        <h3>Total Servers</h3>
-                        <div class="count" id="total-servers">-</div>
-                    </div>
+
+    <div class="projects-container">
+        <!-- Projects will be loaded here -->
+    </div>
+
+    <!-- Project Template -->
+    <template id="project-template">
+        <div class="project-card">
+            <div class="project-header">
+                <h2 class="project-name"></h2>
+                <div class="project-actions">
+                    <button class="button add-server">Add Server</button>
+                    <button class="button edit-project">Edit</button>
+                    <button class="button delete-project">Delete</button>
                 </div>
-                <div class="summary-card running-servers">
-                    <div class="card-icon">
-                        <span class="dashicons dashicons-yes-alt"></span>
-                    </div>
-                    <div class="card-content">
-                        <h3>Running Servers</h3>
-                        <div class="count" id="running-servers">-</div>
-                    </div>
-                </div>
-                <div class="summary-card total-cost">
-                    <div class="card-icon">
-                        <span class="dashicons dashicons-money-alt"></span>
-                    </div>
-                    <div class="card-content">
-                        <h3>Total Cost</h3>
-                        <div class="cost-details">
-                            <div class="cost-item">
-                                <span class="label">Per Hour:</span>
-                                <span class="value" id="total-hourly-cost">€0.00</span>
-                            </div>
-                            <div class="cost-item">
-                                <span class="label">Per Month:</span>
-                                <span class="value" id="total-monthly-cost">€0.00</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            </div>
+            <div class="servers-grid">
+                <!-- Servers will be loaded here -->
             </div>
         </div>
+    </template>
 
-        <!-- Servers Grid -->
-        <div id="servers-grid" class="servers-grid"></div>
-
-        <!-- No Servers Message -->
-        <div id="no-servers" class="no-servers" style="display: none;">
-            <div class="empty-state">
-                <span class="dashicons dashicons-cloud"></span>
-                <h2>No Servers Found</h2>
-                <p>No Hetzner Cloud servers were found in your account.</p>
-                <a href="https://console.hetzner.cloud/projects" target="_blank" class="button button-primary">
-                    Create Server
-                </a>
+    <!-- Server Template -->
+    <template id="server-template">
+        <div class="server-card">
+            <div class="server-header">
+                <div class="server-status"></div>
+                <h3 class="server-name"></h3>
             </div>
+            <div class="server-details">
+                <div class="detail-row">
+                    <span class="label">IP Address:</span>
+                    <span class="ip-address"></span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Created:</span>
+                    <span class="created-date"></span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">Age:</span>
+                    <span class="server-age"></span>
+                </div>
+            </div>
+            <div class="server-actions">
+                <button class="button power-action">
+                    <span class="dashicons"></span>
+                </button>
+                <button class="button edit-server">
+                    <span class="dashicons dashicons-edit"></span>
+                </button>
+                <button class="button delete-server">
+                    <span class="dashicons dashicons-trash"></span>
+                </button>
+            </div>
+        </div>
+    </template>
+
+    <!-- Add/Edit Project Modal -->
+    <div id="project-modal" class="modal">
+        <div class="modal-content">
+            <h2>Add Project</h2>
+            <form id="project-form">
+                <div class="form-group">
+                    <label for="project-name">Project Name</label>
+                    <input type="text" id="project-name" name="project-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="project-description">Description</label>
+                    <textarea id="project-description" name="project-description"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="button button-primary">Save Project</button>
+                    <button type="button" class="button modal-close">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
-
-<template id="server-card-template">
-    <div class="server-card">
-        <div class="server-header">
-            <div class="server-name-status">
-                <h3 class="server-name"></h3>
-                <span class="server-status"></span>
-            </div>
-            <div class="server-actions">
-                <button class="button console-btn">
-                    <span class="dashicons dashicons-desktop"></span>
-                </button>
-                <button class="button power-btn">
-                    <span class="dashicons dashicons-power-on"></span>
-                </button>
-            </div>
-        </div>
-        <div class="server-info">
-            <div class="info-grid">
-                <div class="info-item">
-                    <span class="label">IP Address</span>
-                    <span class="ip value"></span>
-                </div>
-                <div class="info-item">
-                    <span class="label">Type</span>
-                    <span class="type value"></span>
-                </div>
-                <div class="info-item">
-                    <span class="label">Location</span>
-                    <span class="location value"></span>
-                </div>
-                <div class="info-item">
-                    <span class="label">Cost</span>
-                    <span class="cost value">
-                        <span class="hourly-cost"></span>/hr
-                        (<span class="monthly-cost"></span>/mo)
-                    </span>
-                </div>
-            </div>
-            <div class="server-metrics">
-                <div class="metric-item">
-                    <span class="metric-icon dashicons dashicons-dashboard"></span>
-                    <div class="metric-info">
-                        <span class="metric-label">CPU Usage</span>
-                        <span class="metric-value cpu-usage">0%</span>
-                        <div class="progress-bar">
-                            <div class="progress cpu-progress" style="width: 0%"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="metric-item">
-                    <span class="metric-icon dashicons dashicons-memory"></span>
-                    <div class="metric-info">
-                        <span class="metric-label">Memory Usage</span>
-                        <span class="metric-value memory-usage">0%</span>
-                        <div class="progress-bar">
-                            <div class="progress memory-progress" style="width: 0%"></div>
-                        </div>
-                    </div>
-                </div>
-                <div class="metric-item">
-                    <span class="metric-icon dashicons dashicons-database"></span>
-                    <div class="metric-info">
-                        <span class="metric-label">Disk Usage</span>
-                        <span class="metric-value disk-usage">0%</span>
-                        <div class="progress-bar">
-                            <div class="progress disk-progress" style="width: 0%"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</template>
 
 <style>
 .kloudpanel-dashboard {
@@ -168,146 +104,66 @@ if (!defined('ABSPATH')) {
     margin-bottom: 30px;
 }
 
-.refresh-info {
+.dashboard-actions {
     display: flex;
-    align-items: center;
     gap: 15px;
 }
 
-.last-update {
-    color: #666;
-    font-size: 13px;
-}
-
-/* Loading Progress */
-.loading-progress {
-    display: none;
-    margin: 20px 0;
-    padding: 15px;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.loading-progress.active {
-    display: block;
-}
-
-.loading-progress .progress-bar {
+.progress-bar {
     height: 4px;
     background: #e5e7eb;
     border-radius: 2px;
     overflow: hidden;
-    margin-bottom: 10px;
+    margin-top: 4px;
 }
 
-.loading-progress .progress-value {
+.progress-value {
     height: 100%;
     width: 0;
     background: #2271b1;
     transition: width 0.3s ease;
 }
 
-.loading-progress .progress-text {
-    font-size: 13px;
-    color: #666;
-    text-align: center;
-}
-
-/* Summary Cards */
-.summary-section {
-    margin-bottom: 30px;
-}
-
-.summary-cards {
+.projects-container {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 20px;
 }
 
-.summary-card {
+.project-card {
     background: white;
     border-radius: 12px;
     padding: 20px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.summary-card:hover {
+.project-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.card-icon {
-    background: #f0f9ff;
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.card-icon .dashicons {
-    font-size: 24px;
-    width: 24px;
-    height: 24px;
-    color: #2271b1;
-}
-
-.card-content h3 {
-    margin: 0;
-    font-size: 14px;
-    color: #666;
-}
-
-.card-content .count {
-    font-size: 24px;
-    font-weight: 600;
-    color: #1d2327;
-    margin-top: 5px;
-}
-
-.cost-details {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.cost-item {
+.project-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 14px;
+    margin-bottom: 20px;
 }
 
-.cost-item .label {
-    color: #666;
-}
-
-.cost-item .value {
-    font-weight: 500;
+.project-name {
+    margin: 0;
+    font-size: 16px;
     color: #1d2327;
 }
 
-.server-card .cost.value {
+.project-actions {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    gap: 8px;
 }
 
-.server-card .cost.value .monthly-cost {
-    font-size: 12px;
-    color: #666;
-}
-
-/* Servers Grid */
 .servers-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 20px;
 }
 
@@ -327,18 +183,8 @@ if (!defined('ABSPATH')) {
 .server-header {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
+    align-items: center;
     margin-bottom: 20px;
-}
-
-.server-name-status {
-    flex: 1;
-}
-
-.server-name {
-    margin: 0 0 8px 0;
-    font-size: 16px;
-    color: #1d2327;
 }
 
 .server-status {
@@ -370,139 +216,106 @@ if (!defined('ABSPATH')) {
     line-height: 1;
 }
 
-.info-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
-    margin-bottom: 20px;
-}
-
-.info-item {
+.detail-row {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.info-item .label {
-    font-size: 12px;
-    color: #666;
-}
-
-.info-item .value {
-    font-size: 14px;
-    color: #1d2327;
-}
-
-.server-metrics {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.metric-item {
-    display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 15px;
+    margin-bottom: 10px;
 }
 
-.metric-icon {
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
-    color: #666;
-}
-
-.metric-info {
-    flex: 1;
-}
-
-.metric-label {
+.label {
     font-size: 12px;
     color: #666;
 }
 
-.metric-value {
-    font-size: 12px;
-    color: #1d2327;
+.server-details {
+    margin-bottom: 20px;
 }
 
-.progress-bar {
-    height: 6px;
-    background: #e5e7eb;
-    border-radius: 3px;
-    overflow: hidden;
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1;
 }
 
-.progress {
-    height: 100%;
-    transition: width 0.3s ease;
+.modal-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.progress.low {
-    background: #2271b1;
+.modal-close {
+    background: #f0f0f0;
+    color: #666;
+    border: none;
+    padding: 10px 20px;
+    font-size: 14px;
+    cursor: pointer;
 }
 
-.progress.medium {
-    background: #f59e0b;
+.modal-close:hover {
+    background: #e5e5e5;
 }
 
-.progress.high {
-    background: #dc2626;
+.form-group {
+    margin-bottom: 20px;
 }
 
-.progress {
-    height: 4px;
-    background-color: #4CAF50;
-    transition: width 0.3s ease-in-out;
+.form-group label {
+    display: block;
+    margin-bottom: 10px;
 }
 
-.progress.medium {
-    background-color: #FFA726;
-}
-
-.progress.high {
-    background-color: #EF5350;
-}
-
-.progress-bar {
+.form-group input, .form-group textarea {
     width: 100%;
-    height: 4px;
-    background-color: #f0f0f0;
-    border-radius: 2px;
-    overflow: hidden;
-    margin-top: 4px;
+    padding: 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
 }
 
-/* Empty State */
-.no-servers {
-    text-align: center;
-    padding: 60px 20px;
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
-.empty-state {
-    max-width: 400px;
-    margin: 0 auto;
+.button {
+    padding: 10px 20px;
+    font-size: 14px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
 }
 
-.empty-state .dashicons {
-    font-size: 48px;
-    width: 48px;
-    height: 48px;
+.button-primary {
+    background: #2271b1;
+    color: white;
+}
+
+.button-primary:hover {
+    background: #1a6da8;
+}
+
+.button-secondary {
+    background: #f0f0f0;
     color: #666;
-    margin-bottom: 20px;
 }
 
-.empty-state h2 {
-    margin: 0 0 10px 0;
-    color: #1d2327;
+.button-secondary:hover {
+    background: #e5e5e5;
 }
 
-.empty-state p {
-    color: #666;
-    margin-bottom: 20px;
-}
-
-/* Responsive Design */
 @media (max-width: 782px) {
     .dashboard-header {
         flex-direction: column;
@@ -510,15 +323,11 @@ if (!defined('ABSPATH')) {
         gap: 15px;
     }
     
-    .summary-cards {
+    .projects-container {
         grid-template-columns: 1fr;
     }
     
     .servers-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .info-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -526,104 +335,54 @@ if (!defined('ABSPATH')) {
 
 <script>
 jQuery(document).ready(function($) {
-    function updateServerStatus() {
-        $.ajax({
-            url: kloudpanel.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'get_server_status',
-                nonce: kloudpanel.nonce
-            },
-            success: function(response) {
-                if (response.success) {
-                    updateDashboard(response.data);
-                }
-            }
-        });
-    }
+    // Add event listeners for project actions
+    $('#add-project').on('click', function() {
+        // Show project modal
+        $('#project-modal').fadeIn();
+    });
 
-    function updateDashboard(servers) {
-        const grid = $('#servers-grid');
-        grid.empty();
-        
-        $('#total-servers').text(servers.length);
-        
-        let runningServers = 0;
-        let totalHourlyCost = 0;
-        let totalMonthlyCost = 0;
-        
-        servers.forEach(function(server) {
-            const card = createServerCard(server);
-            grid.append(card);
-            
-            if (server.status === 'running') {
-                runningServers++;
-            }
-            
-            totalHourlyCost += server.hourlyCost;
-            totalMonthlyCost += server.monthlyCost;
-        });
-        
-        $('#running-servers').text(runningServers);
-        $('#total-hourly-cost').text('€' + totalHourlyCost.toFixed(2));
-        $('#total-monthly-cost').text('€' + totalMonthlyCost.toFixed(2));
-    }
+    // Add event listener for project form submission
+    $('#project-form').on('submit', function(e) {
+        e.preventDefault();
+        // Get project name and description
+        const projectName = $('#project-name').val();
+        const projectDescription = $('#project-description').val();
 
-    function createServerCard(server) {
-        const template = document.getElementById('server-card-template');
+        // Create project card
+        const projectCard = createProjectCard(projectName, projectDescription);
+
+        // Add project card to projects container
+        $('.projects-container').append(projectCard);
+
+        // Hide project modal
+        $('#project-modal').fadeOut();
+    });
+
+    // Function to create project card
+    function createProjectCard(projectName, projectDescription) {
+        const template = document.getElementById('project-template');
         const card = $(template.content.cloneNode(true));
-        
-        card.find('.server-name').text(server.name);
-        card.find('.server-status')
-            .text(server.status)
-            .addClass(server.status);
-        card.find('.ip').text(server.ip);
-        card.find('.type').text(server.type);
-        card.find('.location').text(server.datacenter);
-        card.find('.hourly-cost').text('€' + server.hourlyCost.toFixed(2));
-        card.find('.monthly-cost').text('€' + server.monthlyCost.toFixed(2));
-        
-        if (server.metrics) {
-            updateMetrics(card, server.metrics);
-        }
-        
+
+        card.find('.project-name').text(projectName);
+        card.find('.project-description').text(projectDescription);
+
         return card;
     }
 
-    function updateMetrics(card, metrics) {
-        // Update CPU usage
-        const cpuUsage = calculateCPUUsage(metrics.cpu);
-        card.find('.cpu-progress').css('width', cpuUsage + '%');
-        card.find('.cpu-usage').text(cpuUsage + '%');
-        
-        // Update Memory usage
-        const memoryUsage = calculateMemoryUsage(metrics.memory);
-        card.find('.memory-progress').css('width', memoryUsage + '%');
-        card.find('.memory-usage').text(memoryUsage + '%');
-        
-        // Update Disk usage
-        const diskUsage = calculateDiskUsage(metrics.disk);
-        card.find('.disk-progress').css('width', diskUsage + '%');
-        card.find('.disk-usage').text(diskUsage + '%');
-    }
+    // Add event listeners for server actions
+    $(document).on('click', '.add-server', function() {
+        // Show server modal
+        // ...
+    });
 
-    function calculateCPUUsage(cpuMetrics) {
-        // Implement CPU usage calculation based on metrics
-        return Math.round(cpuMetrics * 100) || 0;
-    }
+    $(document).on('click', '.edit-server', function() {
+        // Show server modal
+        // ...
+    });
 
-    function calculateMemoryUsage(memoryMetrics) {
-        // Implement memory usage calculation based on metrics
-        return Math.round(memoryMetrics * 100) || 0;
-    }
-
-    function calculateDiskUsage(diskMetrics) {
-        // Implement disk usage calculation based on metrics
-        return Math.round(diskMetrics * 100) || 0;
-    }
-
-    // Update status every 30 seconds
-    updateServerStatus();
-    setInterval(updateServerStatus, 30000);
+    $(document).on('click', '.delete-server', function() {
+        // Delete server
+        // ...
+    });
 });
 </script>
