@@ -1,0 +1,34 @@
+# Directories
+.git
+.github
+.wordpress-org
+node_modules
+tests
+vendor
+
+# Files
+.distignore
+.gitignore
+.gitattributes
+.editorconfig
+.eslintrc.json
+.eslintignore
+.prettierrc.json
+.stylelintrc.json
+composer.json
+composer.lock
+package.json
+package-lock.json
+phpcs.xml
+phpunit.xml
+README.md
+CHANGELOG.md
+LICENSE.md
+*.zip
+*.tar.gz
+
+# Development files
+*.map
+*.log
+.DS_Store
+Thumbs.db
