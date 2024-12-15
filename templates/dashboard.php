@@ -5,7 +5,7 @@ if (!defined('ABSPATH')) exit;
     <div class="dashboard-header">
         <h1>KloudPanel Dashboard</h1>
         <div class="dashboard-actions">
-            <button id="add-project" class="button button-primary">Add Project</button>
+            <button id="add-api-key" class="button button-primary">Add API Key</button>
             <button id="refresh-dashboard" class="button"><span class="dashicons dashicons-update"></span> Refresh</button>
         </div>
     </div>
@@ -14,19 +14,21 @@ if (!defined('ABSPATH')) exit;
         <div class="progress-value"></div>
     </div>
 
-    <div class="projects-container">
-        <!-- Projects will be loaded here -->
+    <div class="api-groups-container">
+        <!-- API Groups will be loaded here -->
     </div>
 
-    <!-- Project Template -->
-    <template id="project-template">
-        <div class="project-card">
-            <div class="project-header">
-                <h2 class="project-name"></h2>
-                <div class="project-actions">
-                    <button class="button add-server">Add Server</button>
-                    <button class="button edit-project">Edit</button>
-                    <button class="button delete-project">Delete</button>
+    <!-- API Group Template -->
+    <template id="api-group-template">
+        <div class="api-group-card">
+            <div class="group-header">
+                <div class="group-info">
+                    <h2 class="group-name"></h2>
+                    <span class="api-key-hint"></span>
+                </div>
+                <div class="group-actions">
+                    <button class="button edit-api">Edit API Key</button>
+                    <button class="button delete-api">Delete</button>
                 </div>
             </div>
             <div class="servers-grid">
@@ -70,21 +72,22 @@ if (!defined('ABSPATH')) exit;
         </div>
     </template>
 
-    <!-- Add/Edit Project Modal -->
-    <div id="project-modal" class="modal">
+    <!-- Add/Edit API Key Modal -->
+    <div id="api-key-modal" class="modal">
         <div class="modal-content">
-            <h2>Add Project</h2>
-            <form id="project-form">
+            <h2>Add API Key Group</h2>
+            <form id="api-key-form">
                 <div class="form-group">
-                    <label for="project-name">Project Name</label>
-                    <input type="text" id="project-name" name="project-name" required>
+                    <label for="group-name">Group Name</label>
+                    <input type="text" id="group-name" name="group-name" required placeholder="e.g., Production Servers">
                 </div>
                 <div class="form-group">
-                    <label for="project-description">Description</label>
-                    <textarea id="project-description" name="project-description"></textarea>
+                    <label for="api-key">Hetzner API Key</label>
+                    <input type="password" id="api-key" name="api-key" required placeholder="Enter your Hetzner Cloud API key">
+                    <p class="description">Your API key will be securely stored and encrypted.</p>
                 </div>
                 <div class="form-actions">
-                    <button type="submit" class="button button-primary">Save Project</button>
+                    <button type="submit" class="button button-primary">Save API Key</button>
                     <button type="button" class="button modal-close">Cancel</button>
                 </div>
             </form>
@@ -114,23 +117,24 @@ if (!defined('ABSPATH')) exit;
     background: #e5e7eb;
     border-radius: 2px;
     overflow: hidden;
+    margin-bottom: 30px;
     margin-top: 4px;
+    display: none;
 }
 
 .progress-value {
     height: 100%;
     width: 0;
     background: #2271b1;
-    transition: width 0.3s ease;
+    border-radius: 2px;
 }
 
-.projects-container {
+.api-groups-container {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
+    gap: 30px;
 }
 
-.project-card {
+.api-group-card {
     background: white;
     border-radius: 12px;
     padding: 20px;
@@ -138,25 +142,38 @@ if (!defined('ABSPATH')) exit;
     transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.project-card:hover {
+.api-group-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-.project-header {
+.group-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #e5e7eb;
 }
 
-.project-name {
+.group-info {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.group-name {
     margin: 0;
-    font-size: 16px;
+    font-size: 18px;
     color: #1d2327;
 }
 
-.project-actions {
+.api-key-hint {
+    font-size: 12px;
+    color: #666;
+}
+
+.group-actions {
     display: flex;
     gap: 8px;
 }
@@ -323,7 +340,7 @@ if (!defined('ABSPATH')) exit;
         gap: 15px;
     }
     
-    .projects-container {
+    .api-groups-container {
         grid-template-columns: 1fr;
     }
     
@@ -335,36 +352,36 @@ if (!defined('ABSPATH')) exit;
 
 <script>
 jQuery(document).ready(function($) {
-    // Add event listeners for project actions
-    $('#add-project').on('click', function() {
-        // Show project modal
-        $('#project-modal').fadeIn();
+    // Add event listeners for API key actions
+    $('#add-api-key').on('click', function() {
+        // Show API key modal
+        $('#api-key-modal').fadeIn();
     });
 
-    // Add event listener for project form submission
-    $('#project-form').on('submit', function(e) {
+    // Add event listener for API key form submission
+    $('#api-key-form').on('submit', function(e) {
         e.preventDefault();
-        // Get project name and description
-        const projectName = $('#project-name').val();
-        const projectDescription = $('#project-description').val();
+        // Get API key group name and API key
+        const groupName = $('#group-name').val();
+        const apiKey = $('#api-key').val();
 
-        // Create project card
-        const projectCard = createProjectCard(projectName, projectDescription);
+        // Create API key group card
+        const apiKeyGroupCard = createApiKeyGroupCard(groupName, apiKey);
 
-        // Add project card to projects container
-        $('.projects-container').append(projectCard);
+        // Add API key group card to API key groups container
+        $('.api-groups-container').append(apiKeyGroupCard);
 
-        // Hide project modal
-        $('#project-modal').fadeOut();
+        // Hide API key modal
+        $('#api-key-modal').fadeOut();
     });
 
-    // Function to create project card
-    function createProjectCard(projectName, projectDescription) {
-        const template = document.getElementById('project-template');
+    // Function to create API key group card
+    function createApiKeyGroupCard(groupName, apiKey) {
+        const template = document.getElementById('api-group-template');
         const card = $(template.content.cloneNode(true));
 
-        card.find('.project-name').text(projectName);
-        card.find('.project-description').text(projectDescription);
+        card.find('.group-name').text(groupName);
+        card.find('.api-key-hint').text('API Key: ' + apiKey.substring(0, 10) + '...');
 
         return card;
     }

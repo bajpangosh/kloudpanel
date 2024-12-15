@@ -1,190 +1,191 @@
 /* KloudPanel Admin JavaScript */
 jQuery(document).ready(function($) {
-    let isLoading = false;
-    let progressInterval;
+    let loadingProgress = 0;
+    const progressBar = $('#loading-progress');
+    const progressValue = progressBar.find('.progress-value');
 
-    // Initialize projects
-    function initDashboard() {
-        updateServerStatus(true);
+    function updateProgress(value) {
+        loadingProgress = value;
+        progressValue.css('width', value + '%');
+        if (value >= 100) {
+            setTimeout(() => progressBar.fadeOut(), 500);
+        } else {
+            progressBar.fadeIn();
+        }
     }
 
-    function updateServerStatus(showProgress = true) {
-        if (isLoading) return;
-        isLoading = true;
-
-        if (showProgress) {
-            startLoadingProgress();
-        }
-
+    // Load API Key Groups and their servers
+    function loadApiGroups() {
+        updateProgress(0);
         $.ajax({
-            url: kloudpanel.ajax_url,
+            url: ajaxurl,
             type: 'POST',
             data: {
-                action: 'get_servers_data',
+                action: 'get_api_groups',
                 nonce: kloudpanel.nonce
             },
             success: function(response) {
                 if (response.success) {
-                    updateDashboard(response.data);
-                    hideError();
+                    updateProgress(30);
+                    const groups = response.data;
+                    $('.api-groups-container').empty();
+                    
+                    // Load servers for each group
+                    groups.forEach((group, index) => {
+                        const groupCard = createApiKeyGroupCard(group);
+                        $('.api-groups-container').append(groupCard);
+                        
+                        loadServers(group.api_key, group.id);
+                        updateProgress(30 + ((index + 1) / groups.length * 70));
+                    });
                 } else {
-                    const errorMsg = response.data ? response.data.message : 'Failed to fetch server data';
-                    showError(errorMsg);
-                    if (kloudpanel.debug) {
-                        console.error('Server Error:', response);
-                    }
+                    showError('Failed to load API groups: ' + (response.data.message || 'Unknown error'));
                 }
             },
             error: function(xhr, status, error) {
-                const errorMsg = 'Failed to connect to the server';
-                showError(errorMsg);
-                if (kloudpanel.debug) {
-                    console.error('AJAX Error:', {xhr, status, error});
-                }
-            },
-            complete: function() {
-                isLoading = false;
-                if (showProgress) {
-                    stopLoadingProgress();
-                }
+                showError('Failed to load API groups: ' + error);
+                updateProgress(100);
             }
         });
     }
 
-    function updateDashboard(data) {
-        const servers = data.servers || [];
-        const defaultProject = 'Default Project';
-        
-        // Group servers by project (for now, all in default project)
-        const projectServers = {
-            [defaultProject]: servers
-        };
-
-        // Clear existing projects
-        $('.projects-container').empty();
-
-        // Create project cards
-        Object.entries(projectServers).forEach(([projectName, projectServers]) => {
-            const projectCard = createProjectCard(projectName, projectServers);
-            $('.projects-container').append(projectCard);
+    function loadServers(apiKey, groupId) {
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'get_servers',
+                api_key: apiKey,
+                group_id: groupId,
+                nonce: kloudpanel.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    const servers = response.data;
+                    const groupCard = $(`.api-group-card[data-group-id="${groupId}"]`);
+                    const serversGrid = groupCard.find('.servers-grid');
+                    serversGrid.empty();
+                    
+                    servers.forEach(server => {
+                        const serverCard = createServerCard(server);
+                        serversGrid.append(serverCard);
+                    });
+                } else {
+                    showError('Failed to load servers: ' + (response.data.message || 'Unknown error'));
+                }
+            },
+            error: function(xhr, status, error) {
+                showError('Failed to load servers: ' + error);
+            }
         });
     }
 
-    function createProjectCard(projectName, servers) {
-        const template = document.getElementById('project-template');
+    function createApiKeyGroupCard(group) {
+        const template = document.getElementById('api-group-template');
         const card = $(template.content.cloneNode(true));
         
-        card.find('.project-name').text(projectName);
+        card.find('.api-group-card').attr('data-group-id', group.id);
+        card.find('.group-name').text(group.name);
+        card.find('.api-key-hint').text('API Key: ' + maskApiKey(group.api_key));
         
-        // Add servers to project
-        const serversGrid = card.find('.servers-grid');
-        servers.forEach(server => {
-            const serverCard = createServerCard(server);
-            serversGrid.append(serverCard);
-        });
-
+        // Add event listeners for group actions
+        card.find('.edit-api').on('click', () => editApiGroup(group));
+        card.find('.delete-api').on('click', () => deleteApiGroup(group.id));
+        
         return card;
     }
 
     function createServerCard(server) {
         const template = document.getElementById('server-template');
         const card = $(template.content.cloneNode(true));
-
-        // Calculate server age
-        const createdDate = new Date(server.created);
-        const now = new Date();
-        const ageInDays = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24));
-        const age = formatAge(ageInDays);
-
-        // Update card content
+        
+        card.find('.server-card').attr('data-server-id', server.id);
         card.find('.server-name').text(server.name);
-        card.find('.server-status')
-            .addClass(server.status)
-            .attr('title', server.status);
-        card.find('.ip-address').text(server.public_net.ipv4.ip);
-        card.find('.created-date').text(createdDate.toLocaleDateString());
-        card.find('.server-age').text(age);
-
-        // Set power button icon based on status
-        const powerButton = card.find('.power-action .dashicons');
-        powerButton.addClass(server.status === 'running' ? 'dashicons-power-off' : 'dashicons-power-on');
-
+        card.find('.server-status').addClass(server.status.toLowerCase());
+        card.find('.ip-address').text(server.ip || 'No IP');
+        card.find('.created-date').text(formatDate(server.created));
+        card.find('.server-age').text(calculateAge(server.created));
+        
+        // Add event listeners for server actions
+        setupServerActions(card, server);
+        
         return card;
     }
 
-    function formatAge(days) {
-        if (days < 1) return 'Today';
-        if (days < 30) return days + ' days';
+    function setupServerActions(card, server) {
+        const powerBtn = card.find('.power-action');
+        powerBtn.addClass(server.status === 'running' ? 'power-off' : 'power-on');
+        powerBtn.find('.dashicons').addClass(server.status === 'running' ? 'dashicons-power-off' : 'dashicons-power-on');
         
-        const months = Math.floor(days / 30);
-        if (months < 12) return months + ' months';
-        
-        const years = Math.floor(months / 12);
-        const remainingMonths = months % 12;
-        return years + ' years' + (remainingMonths ? ', ' + remainingMonths + ' months' : '');
+        powerBtn.on('click', () => toggleServerPower(server));
+        card.find('.edit-server').on('click', () => editServer(server));
+        card.find('.delete-server').on('click', () => deleteServer(server.id));
     }
 
-    // Loading Progress
-    function startLoadingProgress() {
-        const progress = $('#loading-progress');
-        progress.show();
-        animateProgress();
-    }
-
-    function stopLoadingProgress() {
-        const progress = $('#loading-progress');
-        progress.hide();
-        $('.progress-value').css('width', '0%');
-    }
-
-    function animateProgress() {
-        const progressBar = $('.progress-value');
-        progressBar.css('width', '0%');
-        progressBar.animate({ width: '100%' }, 1000);
-    }
-
-    // Error Handling
-    function showError(message = 'An unexpected error occurred') {
-        if (!message || message === '') {
-            message = 'An unexpected error occurred';
-        }
+    // API Key Group Actions
+    $('#api-key-form').on('submit', function(e) {
+        e.preventDefault();
+        const groupName = $('#group-name').val();
+        const apiKey = $('#api-key').val();
         
-        const errorHtml = `
-            <div class="notice notice-error">
-                <p>${message}</p>
-            </div>
-        `;
-        
-        // Remove any existing error messages
-        $('.kloudpanel-dashboard .notice').remove();
-        
-        // Add the new error message at the top of the dashboard
-        $('.kloudpanel-dashboard').prepend(errorHtml);
-    }
-
-    function hideError() {
-        $('.kloudpanel-dashboard .notice').fadeOut(300, function() {
-            $(this).remove();
+        $.ajax({
+            url: ajaxurl,
+            type: 'POST',
+            data: {
+                action: 'add_api_group',
+                name: groupName,
+                api_key: apiKey,
+                nonce: kloudpanel.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    $('#api-key-modal').fadeOut();
+                    loadApiGroups();
+                } else {
+                    showError('Failed to add API group: ' + (response.data.message || 'Unknown error'));
+                }
+            },
+            error: function(xhr, status, error) {
+                showError('Failed to add API group: ' + error);
+            }
         });
+    });
+
+    // Utility functions
+    function maskApiKey(apiKey) {
+        return apiKey.substring(0, 8) + '...' + apiKey.substring(apiKey.length - 4);
     }
 
-    // Project Modal
-    $('#add-project').on('click', function() {
-        $('#project-modal').fadeIn();
-    });
+    function formatDate(dateString) {
+        const date = new Date(dateString);
+        return date.toLocaleDateString();
+    }
 
-    $('.modal-close').on('click', function() {
-        $(this).closest('.modal').fadeOut();
-    });
-
-    $(window).on('click', function(e) {
-        if ($(e.target).hasClass('modal')) {
-            $('.modal').fadeOut();
+    function calculateAge(dateString) {
+        const created = new Date(dateString);
+        const now = new Date();
+        const diffTime = Math.abs(now - created);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays < 30) {
+            return diffDays + ' days';
+        } else if (diffDays < 365) {
+            const months = Math.floor(diffDays / 30);
+            return months + ' month' + (months === 1 ? '' : 's');
+        } else {
+            const years = Math.floor(diffDays / 365);
+            return years + ' year' + (years === 1 ? '' : 's');
         }
-    });
-
-    // Initialize dashboard if we're on the dashboard page
-    if ($('.kloudpanel-dashboard').length) {
-        initDashboard();
     }
+
+    function showError(message) {
+        // Implement error display logic
+        console.error(message);
+    }
+
+    // Initialize dashboard
+    loadApiGroups();
+    
+    // Refresh dashboard periodically
+    setInterval(loadApiGroups, 300000); // Refresh every 5 minutes
 });
