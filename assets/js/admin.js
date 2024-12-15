@@ -2,6 +2,8 @@
 jQuery(document).ready(function($) {
     let isLoading = false;
     let progressInterval;
+    let updateTimer;
+    const UPDATE_INTERVAL = 30000; // 30 seconds
 
     // Server status update
     function updateServerStatus(showProgress = true) {
@@ -230,5 +232,131 @@ jQuery(document).ready(function($) {
         setInterval(function() {
             updateServerStatus(false);
         }, 30000);
+    }
+
+    function initDashboard() {
+        updateServerData();
+        startAutoUpdate();
+
+        $('#refresh-dashboard').on('click', function() {
+            updateServerData(true);
+        });
+    }
+
+    function startAutoUpdate() {
+        if (updateTimer) {
+            clearInterval(updateTimer);
+        }
+        updateTimer = setInterval(updateServerData, UPDATE_INTERVAL);
+    }
+
+    function updateServerData(showProgress = false) {
+        if (showProgress) {
+            showLoadingProgress();
+        }
+
+        $.ajax({
+            url: kloudpanel.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'get_servers_data',
+                nonce: kloudpanel.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    updateDashboard(response.data);
+                    updateLastUpdateTime();
+                } else {
+                    showError(response.data.message || 'Failed to fetch server data');
+                }
+            },
+            error: function() {
+                showError('Failed to connect to the server');
+            },
+            complete: function() {
+                if (showProgress) {
+                    hideLoadingProgress();
+                }
+            }
+        });
+    }
+
+    function updateDashboard(data) {
+        const { servers, summary } = data;
+        updateSummaryCards(summary);
+        updateServersGrid(servers);
+        fetchServerMetrics(servers);
+    }
+
+    function fetchServerMetrics(servers) {
+        servers.forEach(server => {
+            $.ajax({
+                url: kloudpanel.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'get_server_metrics',
+                    server_id: server.id,
+                    nonce: kloudpanel.nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        updateServerMetrics(server.id, response.data);
+                    }
+                }
+            });
+        });
+    }
+
+    function updateServerMetrics(serverId, metrics) {
+        const card = $(`#server-${serverId}`);
+        if (!card.length) return;
+
+        // Update CPU Usage
+        const cpuUsage = calculateMetricValue(metrics.cpu);
+        card.find('.cpu-usage').text(cpuUsage + '%');
+        card.find('.cpu-progress').css('width', cpuUsage + '%');
+
+        // Update Memory Usage
+        const memoryUsage = calculateMetricValue(metrics.memory);
+        card.find('.memory-usage').text(memoryUsage + '%');
+        card.find('.memory-progress').css('width', memoryUsage + '%');
+
+        // Update Disk Usage
+        const diskUsage = calculateMetricValue(metrics.disk);
+        card.find('.disk-usage').text(diskUsage + '%');
+        card.find('.disk-progress').css('width', diskUsage + '%');
+    }
+
+    function calculateMetricValue(metricData) {
+        if (!metricData || !metricData.values || !metricData.values.length) {
+            return 0;
+        }
+
+        // Get the latest value
+        const latestValue = metricData.values[metricData.values.length - 1];
+        
+        // Convert to percentage and round to 2 decimal places
+        return Math.round(latestValue * 100) / 100;
+    }
+
+    function showLoadingProgress() {
+        $('#loading-progress').show();
+        animateProgress();
+    }
+
+    function hideLoadingProgress() {
+        $('#loading-progress').hide();
+        $('.progress-value').css('width', '0%');
+    }
+
+    function animateProgress() {
+        const progressBar = $('.progress-value');
+        progressBar.css('width', '0%');
+        progressBar.animate({ width: '100%' }, 1000);
+    }
+
+    // Initialize dashboard if we're on the dashboard page
+    if ($('.kloudpanel-dashboard').length) {
+        initDashboard();
     }
 });

@@ -101,36 +101,39 @@ if (!defined('ABSPATH')) {
                 </div>
                 <div class="info-item">
                     <span class="label">Location</span>
-                    <span class="datacenter value"></span>
+                    <span class="location value"></span>
                 </div>
             </div>
-        </div>
-        <div class="server-metrics">
-            <div class="metric">
-                <div class="metric-header">
-                    <span class="label">CPU Usage</span>
-                    <span class="value cpu-value">-%</span>
+            <div class="server-metrics">
+                <div class="metric-item">
+                    <span class="metric-icon dashicons dashicons-dashboard"></span>
+                    <div class="metric-info">
+                        <span class="metric-label">CPU Usage</span>
+                        <span class="metric-value cpu-usage">0%</span>
+                        <div class="progress-bar">
+                            <div class="progress cpu-progress" style="width: 0%"></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="progress-bar">
-                    <div class="progress cpu-usage"></div>
+                <div class="metric-item">
+                    <span class="metric-icon dashicons dashicons-memory"></span>
+                    <div class="metric-info">
+                        <span class="metric-label">Memory Usage</span>
+                        <span class="metric-value memory-usage">0%</span>
+                        <div class="progress-bar">
+                            <div class="progress memory-progress" style="width: 0%"></div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="metric">
-                <div class="metric-header">
-                    <span class="label">Memory Usage</span>
-                    <span class="value memory-value">-%</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress memory-usage"></div>
-                </div>
-            </div>
-            <div class="metric">
-                <div class="metric-header">
-                    <span class="label">Disk Usage</span>
-                    <span class="value disk-value">-%</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress disk-usage"></div>
+                <div class="metric-item">
+                    <span class="metric-icon dashicons dashicons-database"></span>
+                    <div class="metric-info">
+                        <span class="metric-label">Disk Usage</span>
+                        <span class="metric-value disk-usage">0%</span>
+                        <div class="progress-bar">
+                            <div class="progress disk-progress" style="width: 0%"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -347,19 +350,29 @@ if (!defined('ABSPATH')) {
     gap: 15px;
 }
 
-.metric-header {
+.metric-item {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    gap: 15px;
 }
 
-.metric .label {
+.metric-icon {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    color: #666;
+}
+
+.metric-info {
+    flex: 1;
+}
+
+.metric-label {
     font-size: 12px;
     color: #666;
 }
 
-.metric .value {
+.metric-value {
     font-size: 12px;
     color: #1d2327;
 }
@@ -489,7 +502,7 @@ jQuery(document).ready(function($) {
             .addClass(server.status);
         card.find('.ip').text(server.ip);
         card.find('.type').text(server.type);
-        card.find('.datacenter').text(server.datacenter);
+        card.find('.location').text(server.datacenter);
         
         if (server.metrics) {
             updateMetrics(card, server.metrics);
@@ -501,18 +514,18 @@ jQuery(document).ready(function($) {
     function updateMetrics(card, metrics) {
         // Update CPU usage
         const cpuUsage = calculateCPUUsage(metrics.cpu);
-        card.find('.cpu-usage').css('width', cpuUsage + '%');
-        card.find('.cpu-value').text(cpuUsage + '%');
+        card.find('.cpu-progress').css('width', cpuUsage + '%');
+        card.find('.cpu-usage').text(cpuUsage + '%');
         
         // Update Memory usage
         const memoryUsage = calculateMemoryUsage(metrics.memory);
-        card.find('.memory-usage').css('width', memoryUsage + '%');
-        card.find('.memory-value').text(memoryUsage + '%');
+        card.find('.memory-progress').css('width', memoryUsage + '%');
+        card.find('.memory-usage').text(memoryUsage + '%');
         
         // Update Disk usage
         const diskUsage = calculateDiskUsage(metrics.disk);
-        card.find('.disk-usage').css('width', diskUsage + '%');
-        card.find('.disk-value').text(diskUsage + '%');
+        card.find('.disk-progress').css('width', diskUsage + '%');
+        card.find('.disk-usage').text(diskUsage + '%');
     }
 
     function calculateCPUUsage(cpuMetrics) {

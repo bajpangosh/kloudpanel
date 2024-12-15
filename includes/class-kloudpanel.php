@@ -6,6 +6,7 @@ class KloudPanel {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_action('wp_ajax_get_server_status', array($this, 'ajax_get_server_status'));
+        add_action('wp_ajax_get_server_metrics', array($this, 'ajax_get_server_metrics'));
         add_action('admin_post_kloudpanel_save_token', array($this, 'handle_save_token'));
         
         // Initialize Hetzner API if token exists
@@ -126,6 +127,31 @@ class KloudPanel {
         }
 
         wp_send_json_success($server_data);
+    }
+
+    public function ajax_get_server_metrics() {
+        check_ajax_referer('kloudpanel_nonce', 'nonce');
+
+        $server_id = isset($_POST['server_id']) ? intval($_POST['server_id']) : 0;
+        if (!$server_id) {
+            wp_send_json_error(['message' => 'Invalid server ID']);
+            return;
+        }
+
+        $api_token = $this->get_api_token();
+        if (!$api_token) {
+            wp_send_json_error(['message' => 'API token not configured']);
+            return;
+        }
+
+        $api = new Hetzner_API($api_token);
+        $metrics = $api->get_server_metrics($server_id);
+
+        if (isset($metrics['metrics'])) {
+            wp_send_json_success($metrics['metrics']);
+        } else {
+            wp_send_json_error(['message' => 'Failed to fetch server metrics']);
+        }
     }
 
     private function get_api_token() {
