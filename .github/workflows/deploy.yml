@@ -72,8 +72,10 @@ jobs:
           SSH_KEY: ${{ secrets.DEPLOY_KEY }}
 
       - name: Sync plugin files
-        run: "rsync --delete -avO
-          --exclude /deploy_key \
-          --exclude /.git/ \
-          --exclude /.github/ \
-          ./ ${{ env.SSH_USER }}@${{ env.SSH_HOST }}:/www/wwwroot/dev.kloudboy.com/wp-content/plugins/kloudpanel"
+        run: |
+          # Use rsync with SSH configuration
+          rsync --delete -avO -e "ssh -i ~/.ssh/deploy.key -o StrictHostKeyChecking=no" \
+            --exclude /deploy_key \
+            --exclude /.git/ \
+            --exclude /.github/ \
+            ./ ${{ env.SSH_USER }}@${{ env.SSH_HOST }}:/www/wwwroot/dev.kloudboy.com/wp-content/plugins/kloudpanel
