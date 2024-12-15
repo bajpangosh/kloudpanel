@@ -26,12 +26,22 @@ jobs:
           php-version: '7.4'
           extensions: mbstring, xml, zip
 
+      - name: Test SSH Connection
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "Testing SSH connection..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "echo 'Connection successful'"
+
       - name: Create plugin archive
+        if: success()
         run: |
           mkdir -p build
           zip -r "build/${{ env.PLUGIN_NAME }}.zip" . -x "*.git*" "*.github*" "build*" "tests*" "*.DS_Store"
 
       - name: Deploy via SFTP
+        if: success()
         uses: wlixcc/SFTP-Deploy-Action@v1.2.4
         with:
           username: ${{ secrets.SSH_USER }}
