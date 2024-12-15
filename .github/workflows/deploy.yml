@@ -31,37 +31,24 @@ jobs:
           mkdir -p build
           zip -r "build/${{ env.PLUGIN_NAME }}.zip" . -x "*.git*" "*.github*" "build*" "tests*" "*.DS_Store"
 
-      - name: Install SSH key
-        uses: shimataro/ssh-key-action@v2
+      - name: Deploy to WordPress via SFTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
-
-      - name: Deploy to server
-        env:
-          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-          REMOTE_USER: ${{ secrets.REMOTE_USER }}
-          REMOTE_PATH: ${{ secrets.REMOTE_PATH }}
-        run: |
-          # Upload the plugin zip file
-          scp "build/${{ env.PLUGIN_NAME }}.zip" ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }}:${{ env.REMOTE_PATH }}
-
-          # SSH commands to handle plugin installation
-          ssh ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }} "
-            cd ${{ env.REMOTE_PATH }} && \
-            # Deactivate existing plugin if it exists
-            wp plugin deactivate ${{ env.PLUGIN_NAME }} --allow-root || true && \
-            # Remove existing plugin directory
-            rm -rf wp-content/plugins/${{ env.PLUGIN_NAME }} && \
-            # Unzip new plugin
-            unzip -o ${{ env.PLUGIN_NAME }}.zip -d wp-content/plugins/ && \
-            # Activate plugin
-            wp plugin activate ${{ env.PLUGIN_NAME }} --allow-root && \
-            # Cleanup zip file
-            rm ${{ env.PLUGIN_NAME }}.zip && \
-            # Clear cache
-            wp cache flush --allow-root
-          "
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: ${{ secrets.FTP_PORT }}
+          protocol: sftp
+          local-dir: ./
+          server-dir: ${{ secrets.REMOTE_PATH }}/wp-content/plugins/kloudpanel/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/tests/**
+            README.md
+            .gitignore
+            build/**
 
       - name: Notify on success
         if: success()
