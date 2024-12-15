@@ -106,6 +106,68 @@ class Hetzner_API {
         return false;
     }
 
+    public function get_prices() {
+        return $this->make_request('GET', '/pricing');
+    }
+
+    public function calculate_server_costs($servers) {
+        $prices = $this->get_prices();
+        if (!isset($prices['pricing'])) {
+            return [
+                'success' => false,
+                'message' => 'Failed to fetch pricing information'
+            ];
+        }
+
+        $server_prices = $prices['pricing']['server_types'];
+        $total_hourly = 0;
+        $total_monthly = 0;
+        $server_costs = [];
+
+        foreach ($servers as $server) {
+            $server_type = $server['server_type']['name'];
+            $location = $server['datacenter']['location']['name'];
+            $price_info = null;
+
+            // Find price for this server type
+            foreach ($server_prices as $price) {
+                if ($price['name'] === $server_type) {
+                    $price_info = $price;
+                    break;
+                }
+            }
+
+            if ($price_info) {
+                // Get prices with VAT
+                $hourly = $price_info['prices'][0]['price_hourly']['gross'];
+                $monthly = $price_info['prices'][0]['price_monthly']['gross'];
+
+                $server_costs[] = [
+                    'id' => $server['id'],
+                    'name' => $server['name'],
+                    'type' => $server_type,
+                    'location' => $location,
+                    'hourly' => $hourly,
+                    'monthly' => $monthly
+                ];
+
+                if ($server['status'] === 'running') {
+                    $total_hourly += $hourly;
+                    $total_monthly += $monthly;
+                }
+            }
+        }
+
+        return [
+            'success' => true,
+            'data' => [
+                'total_hourly' => round($total_hourly, 4),
+                'total_monthly' => round($total_monthly, 2),
+                'server_costs' => $server_costs
+            ]
+        ];
+    }
+
     private function make_request($method, $endpoint) {
         $args = array(
             'method' => $method,

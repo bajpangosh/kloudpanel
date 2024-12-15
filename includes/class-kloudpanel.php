@@ -5,7 +5,7 @@ class KloudPanel {
     public function init() {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
-        add_action('wp_ajax_get_server_status', array($this, 'ajax_get_server_status'));
+        add_action('wp_ajax_get_servers_data', array($this, 'ajax_get_servers_data'));
         add_action('wp_ajax_get_server_metrics', array($this, 'ajax_get_server_metrics'));
         add_action('admin_post_kloudpanel_save_token', array($this, 'handle_save_token'));
         
@@ -101,32 +101,61 @@ class KloudPanel {
         exit;
     }
 
-    public function ajax_get_server_status() {
-        check_ajax_referer('kloudpanel-nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('Unauthorized');
+    public function ajax_get_servers_data() {
+        check_ajax_referer('kloudpanel_nonce', 'nonce');
+
+        $api_token = $this->get_api_token();
+        if (!$api_token) {
+            wp_send_json_error(['message' => 'API token not configured']);
+            return;
         }
 
-        $servers = $this->hetzner_api->get_servers();
-        $server_data = array();
+        $api = new Hetzner_API($api_token);
+        $response = $api->get_servers();
 
-        if (isset($servers['servers'])) {
-            foreach ($servers['servers'] as $server) {
-                $metrics = $this->hetzner_api->get_server_metrics($server['id']);
-                $server_data[] = array(
-                    'id' => $server['id'],
-                    'name' => $server['name'],
-                    'status' => $server['status'],
-                    'ip' => $server['public_net']['ipv4']['ip'],
-                    'type' => $server['server_type']['name'],
-                    'datacenter' => $server['datacenter']['name'],
-                    'metrics' => $metrics
-                );
+        if (!isset($response['servers'])) {
+            wp_send_json_error(['message' => 'Failed to fetch servers']);
+            return;
+        }
+
+        $servers = $response['servers'];
+        $costs = $api->calculate_server_costs($servers);
+
+        if (!$costs['success']) {
+            wp_send_json_error(['message' => 'Failed to calculate costs']);
+            return;
+        }
+
+        $server_data = [];
+        foreach ($servers as $server) {
+            // Find cost data for this server
+            $server_cost = null;
+            foreach ($costs['data']['server_costs'] as $cost) {
+                if ($cost['id'] === $server['id']) {
+                    $server_cost = $cost;
+                    break;
+                }
             }
+
+            $server_data[] = [
+                'id' => $server['id'],
+                'name' => $server['name'],
+                'status' => $server['status'],
+                'ip' => $server['public_net']['ipv4']['ip'],
+                'type' => $server['server_type']['name'],
+                'datacenter' => $server['datacenter']['location']['name'],
+                'hourlyCost' => $server_cost ? $server_cost['hourly'] : 0,
+                'monthlyCost' => $server_cost ? $server_cost['monthly'] : 0
+            ];
         }
 
-        wp_send_json_success($server_data);
+        wp_send_json_success([
+            'servers' => $server_data,
+            'summary' => [
+                'total_hourly' => $costs['data']['total_hourly'],
+                'total_monthly' => $costs['data']['total_monthly']
+            ]
+        ]);
     }
 
     public function ajax_get_server_metrics() {

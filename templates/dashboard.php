@@ -49,8 +49,17 @@ if (!defined('ABSPATH')) {
                         <span class="dashicons dashicons-money-alt"></span>
                     </div>
                     <div class="card-content">
-                        <h3>Total Cost/Hour</h3>
-                        <div class="count" id="total-cost">€0.00</div>
+                        <h3>Total Cost</h3>
+                        <div class="cost-details">
+                            <div class="cost-item">
+                                <span class="label">Per Hour:</span>
+                                <span class="value" id="total-hourly-cost">€0.00</span>
+                            </div>
+                            <div class="cost-item">
+                                <span class="label">Per Month:</span>
+                                <span class="value" id="total-monthly-cost">€0.00</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -102,6 +111,13 @@ if (!defined('ABSPATH')) {
                 <div class="info-item">
                     <span class="label">Location</span>
                     <span class="location value"></span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Cost</span>
+                    <span class="cost value">
+                        <span class="hourly-cost"></span>/hr
+                        (<span class="monthly-cost"></span>/mo)
+                    </span>
                 </div>
             </div>
             <div class="server-metrics">
@@ -253,6 +269,39 @@ if (!defined('ABSPATH')) {
     font-weight: 600;
     color: #1d2327;
     margin-top: 5px;
+}
+
+.cost-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cost-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+}
+
+.cost-item .label {
+    color: #666;
+}
+
+.cost-item .value {
+    font-weight: 500;
+    color: #1d2327;
+}
+
+.server-card .cost.value {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.server-card .cost.value .monthly-cost {
+    font-size: 12px;
+    color: #666;
 }
 
 /* Servers Grid */
@@ -500,7 +549,8 @@ jQuery(document).ready(function($) {
         $('#total-servers').text(servers.length);
         
         let runningServers = 0;
-        let totalCost = 0;
+        let totalHourlyCost = 0;
+        let totalMonthlyCost = 0;
         
         servers.forEach(function(server) {
             const card = createServerCard(server);
@@ -509,10 +559,14 @@ jQuery(document).ready(function($) {
             if (server.status === 'running') {
                 runningServers++;
             }
+            
+            totalHourlyCost += server.hourlyCost;
+            totalMonthlyCost += server.monthlyCost;
         });
         
         $('#running-servers').text(runningServers);
-        $('#total-cost').text('€' + totalCost.toFixed(2));
+        $('#total-hourly-cost').text('€' + totalHourlyCost.toFixed(2));
+        $('#total-monthly-cost').text('€' + totalMonthlyCost.toFixed(2));
     }
 
     function createServerCard(server) {
@@ -526,6 +580,8 @@ jQuery(document).ready(function($) {
         card.find('.ip').text(server.ip);
         card.find('.type').text(server.type);
         card.find('.location').text(server.datacenter);
+        card.find('.hourly-cost').text('€' + server.hourlyCost.toFixed(2));
+        card.find('.monthly-cost').text('€' + server.monthlyCost.toFixed(2));
         
         if (server.metrics) {
             updateMetrics(card, server.metrics);
