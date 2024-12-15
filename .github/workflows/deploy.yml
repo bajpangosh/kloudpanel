@@ -49,27 +49,3 @@ jobs:
             README.md
             .gitignore
             build/**
-
-      - name: Notify on success
-        if: success()
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.name,
-              body: '✅ Plugin successfully deployed to development server!'
-            })
-
-      - name: Notify on failure
-        if: failure()
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.name,
-              body: '❌ Plugin deployment failed. Please check the workflow logs.'
-            })
