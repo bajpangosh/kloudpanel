@@ -31,16 +31,22 @@ jobs:
           mkdir -p build
           zip -r "build/${{ env.PLUGIN_NAME }}.zip" . -x "*.git*" "*.github*" "build*" "tests*" "*.DS_Store"
 
-      - name: Deploy to WordPress via SFTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          port: ${{ secrets.FTP_PORT }}
-          protocol: sftp
-          local-dir: ./
-          server-dir: ${{ secrets.REMOTE_PATH }}/wp-content/plugins/kloudpanel/
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+      - name: Deploy via SFTP
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+        with:
+          username: ${{ secrets.SSH_USER }}
+          server: ${{ secrets.SSH_HOST }}
+          port: '22'
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+          local_path: './*'
+          remote_path: ${{ secrets.REMOTE_PATH }}/wp-content/plugins/kloudpanel/
+          args: '-o StrictHostKeyChecking=no'
           exclude: |
             **/.git*
             **/.git*/**
