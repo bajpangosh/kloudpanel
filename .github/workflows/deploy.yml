@@ -26,25 +26,31 @@ jobs:
           php-version: '7.4'
           extensions: mbstring, xml, zip
 
-      - name: Test SSH Connection
+      - name: Debug SSH Connection
         run: |
           # Create SSH directory and set permissions
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           
-          # Write private key to file
+          # Write private key to file and debug its content
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           
-          # Test connection with proper error handling
-          if ! ssh -i ~/.ssh/deploy_key \
-                  -o StrictHostKeyChecking=no \
-                  -o ConnectTimeout=10 \
-                  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
-                  "echo 'Connection test successful'"; then
-            echo "SSH connection test failed"
+          echo "=== Checking SSH key format ==="
+          if ! grep -q "PRIVATE KEY" ~/.ssh/deploy_key; then
+            echo "Error: Invalid SSH key format"
             exit 1
           fi
+          
+          echo "=== Testing SSH connection with verbose output ==="
+          ssh -v -i ~/.ssh/deploy_key \
+              -o StrictHostKeyChecking=no \
+              -o ConnectTimeout=10 \
+              ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} \
+              "echo 'Connection test successful'" || {
+            echo "SSH connection failed with exit code $?"
+            exit 1
+          }
 
       - name: Create plugin archive
         if: success()
