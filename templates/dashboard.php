@@ -3,125 +3,298 @@ if (!defined('ABSPATH')) {
     exit;
 }
 ?>
-<div class="wrap">
-    <h1>Hetzner Cloud Dashboard</h1>
+<div class="wrap kloudpanel-dashboard">
+    <div class="dashboard-header">
+        <h1>Hetzner Cloud Dashboard</h1>
+        <div class="refresh-info">
+            <span class="last-update">Last updated: <span id="last-update-time">Just now</span></span>
+            <button id="refresh-dashboard" class="button button-secondary">
+                <span class="dashicons dashicons-update"></span> Refresh
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading Progress -->
+    <div id="loading-progress" class="loading-progress">
+        <div class="progress-bar">
+            <div class="progress-value"></div>
+        </div>
+        <div class="progress-text">Loading server data...</div>
+    </div>
     
-    <div class="kloudpanel-grid">
+    <div class="dashboard-grid">
         <!-- Summary Cards -->
-        <div class="kloudpanel-summary">
-            <div class="card">
-                <h3>Total Servers</h3>
-                <div class="count" id="total-servers">-</div>
-            </div>
-            <div class="card">
-                <h3>Running Servers</h3>
-                <div class="count" id="running-servers">-</div>
-            </div>
-            <div class="card">
-                <h3>Total Cost/Hour</h3>
-                <div class="count" id="total-cost">€0.00</div>
+        <div class="summary-section">
+            <div class="summary-cards">
+                <div class="summary-card total-servers">
+                    <div class="card-icon">
+                        <span class="dashicons dashicons-cloud"></span>
+                    </div>
+                    <div class="card-content">
+                        <h3>Total Servers</h3>
+                        <div class="count" id="total-servers">-</div>
+                    </div>
+                </div>
+                <div class="summary-card running-servers">
+                    <div class="card-icon">
+                        <span class="dashicons dashicons-yes-alt"></span>
+                    </div>
+                    <div class="card-content">
+                        <h3>Running Servers</h3>
+                        <div class="count" id="running-servers">-</div>
+                    </div>
+                </div>
+                <div class="summary-card total-cost">
+                    <div class="card-icon">
+                        <span class="dashicons dashicons-money-alt"></span>
+                    </div>
+                    <div class="card-content">
+                        <h3>Total Cost/Hour</h3>
+                        <div class="count" id="total-cost">€0.00</div>
+                    </div>
+                </div>
             </div>
         </div>
 
         <!-- Servers Grid -->
-        <div id="servers-grid" class="kloudpanel-servers-grid"></div>
+        <div id="servers-grid" class="servers-grid"></div>
+
+        <!-- No Servers Message -->
+        <div id="no-servers" class="no-servers" style="display: none;">
+            <div class="empty-state">
+                <span class="dashicons dashicons-cloud"></span>
+                <h2>No Servers Found</h2>
+                <p>No Hetzner Cloud servers were found in your account.</p>
+                <a href="https://console.hetzner.cloud/projects" target="_blank" class="button button-primary">
+                    Create Server
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 
 <template id="server-card-template">
-    <div class="server-card card">
+    <div class="server-card">
         <div class="server-header">
-            <h3 class="server-name"></h3>
-            <span class="server-status"></span>
+            <div class="server-name-status">
+                <h3 class="server-name"></h3>
+                <span class="server-status"></span>
+            </div>
+            <div class="server-actions">
+                <button class="button console-btn">
+                    <span class="dashicons dashicons-desktop"></span>
+                </button>
+                <button class="button power-btn">
+                    <span class="dashicons dashicons-power-on"></span>
+                </button>
+            </div>
         </div>
         <div class="server-info">
-            <div class="info-row">
-                <span class="label">IP Address:</span>
-                <span class="ip"></span>
-            </div>
-            <div class="info-row">
-                <span class="label">Type:</span>
-                <span class="type"></span>
-            </div>
-            <div class="info-row">
-                <span class="label">Location:</span>
-                <span class="datacenter"></span>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="label">IP Address</span>
+                    <span class="ip value"></span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Type</span>
+                    <span class="type value"></span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Location</span>
+                    <span class="datacenter value"></span>
+                </div>
             </div>
         </div>
         <div class="server-metrics">
             <div class="metric">
-                <label>CPU</label>
+                <div class="metric-header">
+                    <span class="label">CPU Usage</span>
+                    <span class="value cpu-value">-%</span>
+                </div>
                 <div class="progress-bar">
                     <div class="progress cpu-usage"></div>
                 </div>
-                <span class="value cpu-value">-%</span>
             </div>
             <div class="metric">
-                <label>Memory</label>
+                <div class="metric-header">
+                    <span class="label">Memory Usage</span>
+                    <span class="value memory-value">-%</span>
+                </div>
                 <div class="progress-bar">
                     <div class="progress memory-usage"></div>
                 </div>
-                <span class="value memory-value">-%</span>
             </div>
             <div class="metric">
-                <label>Disk</label>
+                <div class="metric-header">
+                    <span class="label">Disk Usage</span>
+                    <span class="value disk-value">-%</span>
+                </div>
                 <div class="progress-bar">
                     <div class="progress disk-usage"></div>
                 </div>
-                <span class="value disk-value">-%</span>
             </div>
-        </div>
-        <div class="server-actions">
-            <a href="#" class="button console-btn">Console</a>
-            <a href="#" class="button power-btn">Power</a>
         </div>
     </div>
 </template>
 
 <style>
-.kloudpanel-grid {
-    margin-top: 20px;
+.kloudpanel-dashboard {
+    margin: 20px;
 }
 
-.kloudpanel-summary {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-    gap: 20px;
-    margin-bottom: 20px;
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
 }
 
-.kloudpanel-summary .card {
-    padding: 20px;
+.refresh-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.last-update {
+    color: #666;
+    font-size: 13px;
+}
+
+/* Loading Progress */
+.loading-progress {
+    display: none;
+    margin: 20px 0;
+    padding: 15px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.loading-progress.active {
+    display: block;
+}
+
+.loading-progress .progress-bar {
+    height: 4px;
+    background: #e5e7eb;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.loading-progress .progress-value {
+    height: 100%;
+    width: 0;
+    background: #2271b1;
+    transition: width 0.3s ease;
+}
+
+.loading-progress .progress-text {
+    font-size: 13px;
+    color: #666;
     text-align: center;
 }
 
-.kloudpanel-summary .count {
-    font-size: 2em;
-    font-weight: bold;
+/* Summary Cards */
+.summary-section {
+    margin-bottom: 30px;
+}
+
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.summary-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.card-icon {
+    background: #f0f9ff;
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-icon .dashicons {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
     color: #2271b1;
 }
 
-.kloudpanel-servers-grid {
+.card-content h3 {
+    margin: 0;
+    font-size: 14px;
+    color: #666;
+}
+
+.card-content .count {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1d2327;
+    margin-top: 5px;
+}
+
+/* Servers Grid */
+.servers-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: 20px;
 }
 
 .server-card {
+    background: white;
+    border-radius: 12px;
     padding: 20px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.server-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .server-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 15px;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+.server-name-status {
+    flex: 1;
+}
+
+.server-name {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    color: #1d2327;
 }
 
 .server-status {
-    padding: 5px 10px;
-    border-radius: 15px;
-    font-size: 0.8em;
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 .server-status.running {
@@ -134,56 +307,135 @@ if (!defined('ABSPATH')) {
     color: #991b1b;
 }
 
-.server-info {
+.server-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.server-actions .button {
+    padding: 4px;
+    min-height: 30px;
+    line-height: 1;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
     margin-bottom: 20px;
 }
 
-.info-row {
+.info-item {
     display: flex;
-    justify-content: space-between;
-    margin-bottom: 5px;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.info-item .label {
+    font-size: 12px;
+    color: #666;
+}
+
+.info-item .value {
+    font-size: 14px;
+    color: #1d2327;
 }
 
 .server-metrics {
-    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
 }
 
-.metric {
-    margin-bottom: 10px;
+.metric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
 }
 
-.metric label {
-    display: block;
-    margin-bottom: 5px;
+.metric .label {
+    font-size: 12px;
+    color: #666;
+}
+
+.metric .value {
+    font-size: 12px;
+    color: #1d2327;
 }
 
 .progress-bar {
-    height: 8px;
+    height: 6px;
     background: #e5e7eb;
-    border-radius: 4px;
+    border-radius: 3px;
     overflow: hidden;
-    margin-bottom: 5px;
 }
 
 .progress {
     height: 100%;
-    background: #2271b1;
     transition: width 0.3s ease;
 }
 
-.value {
-    font-size: 0.9em;
-    color: #6b7280;
+.progress.low {
+    background: #2271b1;
 }
 
-.server-actions {
-    display: flex;
-    gap: 10px;
+.progress.medium {
+    background: #f59e0b;
 }
 
-.console-btn, .power-btn {
-    flex: 1;
+.progress.high {
+    background: #dc2626;
+}
+
+/* Empty State */
+.no-servers {
     text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-state {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.empty-state .dashicons {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+    color: #666;
+    margin-bottom: 20px;
+}
+
+.empty-state h2 {
+    margin: 0 0 10px 0;
+    color: #1d2327;
+}
+
+.empty-state p {
+    color: #666;
+    margin-bottom: 20px;
+}
+
+/* Responsive Design */
+@media (max-width: 782px) {
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+    
+    .summary-cards {
+        grid-template-columns: 1fr;
+    }
+    
+    .servers-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
 }
 </style>
 

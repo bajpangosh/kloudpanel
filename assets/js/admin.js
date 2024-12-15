@@ -1,7 +1,17 @@
 /* KloudPanel Admin JavaScript */
 jQuery(document).ready(function($) {
+    let isLoading = false;
+    let progressInterval;
+
     // Server status update
-    function updateServerStatus() {
+    function updateServerStatus(showProgress = true) {
+        if (isLoading) return;
+        isLoading = true;
+
+        if (showProgress) {
+            startLoadingProgress();
+        }
+
         $.ajax({
             url: kloudpanel.ajax_url,
             type: 'POST',
@@ -12,17 +22,87 @@ jQuery(document).ready(function($) {
             success: function(response) {
                 if (response.success) {
                     updateDashboard(response.data);
+                    updateLastUpdateTime();
+                } else {
+                    showError('Failed to fetch server data');
+                }
+            },
+            error: function() {
+                showError('Failed to connect to the server');
+            },
+            complete: function() {
+                isLoading = false;
+                if (showProgress) {
+                    stopLoadingProgress();
                 }
             }
         });
     }
 
+    // Loading Progress
+    function startLoadingProgress() {
+        const progress = $('#loading-progress');
+        const progressValue = progress.find('.progress-value');
+        let width = 0;
+
+        progress.addClass('active');
+        progressValue.css('width', '0%');
+
+        progressInterval = setInterval(function() {
+            if (width >= 90) {
+                clearInterval(progressInterval);
+                return;
+            }
+            width += (90 - width) * 0.1;
+            progressValue.css('width', width + '%');
+        }, 100);
+    }
+
+    function stopLoadingProgress() {
+        const progress = $('#loading-progress');
+        const progressValue = progress.find('.progress-value');
+
+        clearInterval(progressInterval);
+        progressValue.css('width', '100%');
+
+        setTimeout(function() {
+            progress.removeClass('active');
+            progressValue.css('width', '0%');
+        }, 300);
+    }
+
+    // Show error message
+    function showError(message) {
+        const html = `
+            <div class="notice notice-error is-dismissible">
+                <p>${message}</p>
+            </div>
+        `;
+        $('.wrap > h1').after(html);
+    }
+
+    // Update last update time
+    function updateLastUpdateTime() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString();
+        $('#last-update-time').text(timeString);
+    }
+
     // Update dashboard with server data
     function updateDashboard(servers) {
         const grid = $('#servers-grid');
+        const noServers = $('#no-servers');
         grid.empty();
         
-        $('#total-servers').text(servers.length);
+        if (!servers || servers.length === 0) {
+            grid.hide();
+            noServers.show();
+            updateSummaryCards(0, 0, 0);
+            return;
+        }
+
+        noServers.hide();
+        grid.show();
         
         let runningServers = 0;
         let totalCost = 0;
@@ -37,8 +117,14 @@ jQuery(document).ready(function($) {
             }
         });
         
-        $('#running-servers').text(runningServers);
-        $('#total-cost').text('€' + totalCost.toFixed(2));
+        updateSummaryCards(servers.length, runningServers, totalCost);
+    }
+
+    // Update summary cards
+    function updateSummaryCards(total, running, cost) {
+        $('#total-servers').text(total);
+        $('#running-servers').text(running);
+        $('#total-cost').text('€' + cost.toFixed(2));
     }
 
     // Create server card from template
@@ -98,9 +184,10 @@ jQuery(document).ready(function($) {
         const consoleBtn = card.find('.console-btn');
         const powerBtn = card.find('.power-btn');
         
-        consoleBtn.attr('href', `https://console.hetzner.cloud/projects/${server.project_id}/servers/${server.id}/console`);
+        consoleBtn.attr('href', `https://console.hetzner.cloud/projects/${server.project_id}/servers/${server.id}/console`)
+                 .attr('target', '_blank');
         
-        powerBtn.text(server.status === 'running' ? 'Stop' : 'Start')
+        powerBtn.html(`<span class="dashicons dashicons-${server.status === 'running' ? 'power-off' : 'power-on'}"></span>`)
                 .addClass(server.status === 'running' ? 'button-secondary' : 'button-primary');
                 
         powerBtn.on('click', function(e) {
@@ -126,40 +213,22 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     updateServerStatus();
                 } else {
-                    alert('Failed to change server power state: ' + response.data);
+                    showError('Failed to change server power state: ' + response.data);
                 }
             }
         });
     }
 
-    // Settings page form handler
-    $('#kloudpanel-settings-form').on('submit', function(e) {
-        e.preventDefault();
-        
-        const formData = new FormData(this);
-        formData.append('action', 'save_api_token');
-        formData.append('nonce', kloudpanel.nonce);
-        
-        $.ajax({
-            url: kloudpanel.ajax_url,
-            type: 'POST',
-            data: formData,
-            processData: false,
-            contentType: false,
-            success: function(response) {
-                if (response.success) {
-                    alert('Settings saved successfully!');
-                    window.location.reload();
-                } else {
-                    alert('Error saving settings: ' + response.data);
-                }
-            }
-        });
+    // Manual refresh button
+    $('#refresh-dashboard').on('click', function() {
+        updateServerStatus(true);
     });
 
     // Initialize dashboard updates
     if ($('#servers-grid').length) {
-        updateServerStatus();
-        setInterval(updateServerStatus, 30000);
+        updateServerStatus(true);
+        setInterval(function() {
+            updateServerStatus(false);
+        }, 30000);
     }
 });
