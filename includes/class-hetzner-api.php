@@ -15,16 +15,27 @@ class Hetzner_API {
         return $this->make_request('GET', "/servers/{$server_id}");
     }
 
-    public function get_server_metrics($server_id, $type = 'cpu,disk,memory', $start = null, $end = null) {
-        if (!$start) {
-            $start = date('Y-m-d\TH:i:s\Z', strtotime('-5 minutes'));
-        }
-        if (!$end) {
-            $end = date('Y-m-d\TH:i:s\Z');
+    public function get_server_metrics($server_id) {
+        // Get server details for total resources
+        $server_details = $this->get_server($server_id);
+        if (!isset($server_details['server'])) {
+            return [
+                'success' => false,
+                'message' => 'Failed to get server details'
+            ];
         }
 
+        $server = $server_details['server'];
+        $total_memory = $server['server_type']['memory'] * 1024 * 1024 * 1024; // Convert GB to bytes
+        $total_disk = $server['server_type']['disk'] * 1024 * 1024 * 1024; // Convert GB to bytes
+        $total_cpu = $server['server_type']['cores'];
+
+        // Get metrics for the last 5 minutes
+        $end = date('Y-m-d\TH:i:s\Z');
+        $start = date('Y-m-d\TH:i:s\Z', strtotime('-5 minutes'));
+
         $query = http_build_query([
-            'type' => $type,
+            'type' => 'cpu,memory,disk',
             'start' => $start,
             'end' => $end,
             'step' => '30'
@@ -36,30 +47,33 @@ class Hetzner_API {
             $metrics = $response['metrics'];
             $processed_metrics = [];
 
-            // Process CPU metrics
+            // Process CPU metrics (CPU usage percentage)
             if (isset($metrics['cpu'])) {
                 $cpu_values = $metrics['cpu']['values'];
                 if (!empty($cpu_values)) {
-                    $latest_cpu = end($cpu_values)[1]; // Get the last value
-                    $processed_metrics['cpu'] = round($latest_cpu * 100, 2); // Convert to percentage
+                    $latest_cpu = end($cpu_values)[1];
+                    // Convert CPU seconds to percentage
+                    $processed_metrics['cpu'] = round(($latest_cpu / $total_cpu) * 100, 2);
                 }
             }
 
-            // Process Memory metrics
+            // Process Memory metrics (Memory usage in bytes to percentage)
             if (isset($metrics['memory'])) {
                 $memory_values = $metrics['memory']['values'];
                 if (!empty($memory_values)) {
                     $latest_memory = end($memory_values)[1];
-                    $processed_metrics['memory'] = round($latest_memory * 100, 2);
+                    // Convert bytes to percentage
+                    $processed_metrics['memory'] = round(($latest_memory / $total_memory) * 100, 2);
                 }
             }
 
-            // Process Disk metrics
+            // Process Disk metrics (Disk usage in bytes to percentage)
             if (isset($metrics['disk'])) {
                 $disk_values = $metrics['disk']['values'];
                 if (!empty($disk_values)) {
                     $latest_disk = end($disk_values)[1];
-                    $processed_metrics['disk'] = round($latest_disk * 100, 2);
+                    // Convert bytes to percentage
+                    $processed_metrics['disk'] = round(($latest_disk / $total_disk) * 100, 2);
                 }
             }
 

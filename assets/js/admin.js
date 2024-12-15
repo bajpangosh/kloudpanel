@@ -290,20 +290,30 @@ jQuery(document).ready(function($) {
 
     function fetchServerMetrics(servers) {
         servers.forEach(server => {
-            $.ajax({
-                url: kloudpanel.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'get_server_metrics',
-                    server_id: server.id,
-                    nonce: kloudpanel.nonce
-                },
-                success: function(response) {
-                    if (response.success) {
-                        updateServerMetrics(server.id, response.data);
+            if (server.status === 'running') {
+                $.ajax({
+                    url: kloudpanel.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'get_server_metrics',
+                        server_id: server.id,
+                        nonce: kloudpanel.nonce
+                    },
+                    success: function(response) {
+                        if (response.success && response.data.metrics) {
+                            updateServerMetrics(server.id, response.data.metrics);
+                        } else {
+                            console.error('Failed to fetch metrics:', response.data?.message || 'Unknown error');
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Error fetching metrics:', error);
                     }
-                }
-            });
+                });
+            } else {
+                // Server not running, show 0% for all metrics
+                updateServerMetrics(server.id, { cpu: 0, memory: 0, disk: 0 });
+            }
         });
     }
 
@@ -311,26 +321,21 @@ jQuery(document).ready(function($) {
         const card = $(`#server-${serverId}`);
         if (!card.length) return;
 
-        // Update CPU Usage
-        const cpuUsage = metrics.cpu || 0;
-        card.find('.cpu-usage').text(cpuUsage + '%');
-        card.find('.cpu-progress').css('width', cpuUsage + '%');
-        card.find('.cpu-progress').toggleClass('high', cpuUsage > 80)
-                                 .toggleClass('medium', cpuUsage > 60 && cpuUsage <= 80);
+        // Helper function to update metric display
+        function updateMetric(type, value) {
+            const formattedValue = Math.min(Math.max(value || 0, 0), 100).toFixed(1);
+            card.find(`.${type}-usage`).text(formattedValue + '%');
+            card.find(`.${type}-progress`)
+                .css('width', formattedValue + '%')
+                .toggleClass('high', formattedValue > 80)
+                .toggleClass('medium', formattedValue > 60 && formattedValue <= 80)
+                .toggleClass('low', formattedValue <= 60);
+        }
 
-        // Update Memory Usage
-        const memoryUsage = metrics.memory || 0;
-        card.find('.memory-usage').text(memoryUsage + '%');
-        card.find('.memory-progress').css('width', memoryUsage + '%');
-        card.find('.memory-progress').toggleClass('high', memoryUsage > 80)
-                                    .toggleClass('medium', memoryUsage > 60 && memoryUsage <= 80);
-
-        // Update Disk Usage
-        const diskUsage = metrics.disk || 0;
-        card.find('.disk-usage').text(diskUsage + '%');
-        card.find('.disk-progress').css('width', diskUsage + '%');
-        card.find('.disk-progress').toggleClass('high', diskUsage > 80)
-                                  .toggleClass('medium', diskUsage > 60 && diskUsage <= 80);
+        // Update each metric
+        updateMetric('cpu', metrics.cpu);
+        updateMetric('memory', metrics.memory);
+        updateMetric('disk', metrics.disk);
     }
 
     function calculateMetricValue(metricData) {
