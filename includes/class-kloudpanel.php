@@ -111,7 +111,7 @@ class KloudPanel {
             $api_token = $this->get_api_token();
             if (!$api_token) {
                 error_log('KloudPanel Error: API token not configured');
-                wp_send_json_error(['message' => 'API token not configured']);
+                wp_send_json_error(['message' => 'API token not configured. Please configure it in the settings.']);
                 return;
             }
 
@@ -122,8 +122,9 @@ class KloudPanel {
             error_log('KloudPanel Debug: Server response - ' . print_r($response, true));
 
             if (!isset($response['servers'])) {
-                error_log('KloudPanel Error: Failed to fetch servers - ' . print_r($response, true));
-                wp_send_json_error(['message' => 'Failed to fetch servers']);
+                $error_msg = isset($response['error']) ? $response['error']['message'] : 'Failed to fetch servers';
+                error_log('KloudPanel Error: ' . $error_msg);
+                wp_send_json_error(['message' => $error_msg]);
                 return;
             }
 

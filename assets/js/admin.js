@@ -83,13 +83,22 @@ jQuery(document).ready(function($) {
     }
 
     // Show error message
-    function showError(message) {
-        const html = `
-            <div class="notice notice-error is-dismissible">
+    function showError(message = 'An unexpected error occurred') {
+        if (!message || message === '') {
+            message = 'An unexpected error occurred';
+        }
+        
+        const errorHtml = `
+            <div class="notice notice-error">
                 <p>${message}</p>
             </div>
         `;
-        $('.wrap > h1').after(html);
+        
+        // Remove any existing error messages
+        $('.kloudpanel-dashboard .notice').remove();
+        
+        // Add the new error message at the top of the dashboard
+        $('.kloudpanel-dashboard').prepend(errorHtml);
     }
 
     // Update last update time
@@ -379,22 +388,10 @@ jQuery(document).ready(function($) {
         progressBar.animate({ width: '100%' }, 1000);
     }
 
-    function showError(message) {
-        const errorHtml = `
-            <div class="notice notice-error">
-                <p>${message}</p>
-            </div>
-        `;
-        
-        // Remove any existing error messages
-        $('.kloudpanel-dashboard .notice').remove();
-        
-        // Add the new error message at the top of the dashboard
-        $('.kloudpanel-dashboard .dashboard-header').after(errorHtml);
-    }
-
     function hideError() {
-        $('.kloudpanel-dashboard .notice').remove();
+        $('.kloudpanel-dashboard .notice').fadeOut(300, function() {
+            $(this).remove();
+        });
     }
 
     // Initialize dashboard if we're on the dashboard page
