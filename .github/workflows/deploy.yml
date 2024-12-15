@@ -2,7 +2,7 @@ name: Deploy Plugin
 
 on:
   push:
-    branches: [master]
+    branches: [main]
 
 env:
   SSH_USER: ${{ secrets.SSH_USER }}
