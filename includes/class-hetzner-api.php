@@ -15,9 +15,9 @@ class Hetzner_API {
         return $this->make_request('GET', "/servers/{$server_id}");
     }
 
-    public function get_server_metrics($server_id, $type = 'cpu,disk,network,memory', $start = null, $end = null) {
+    public function get_server_metrics($server_id, $type = 'cpu,disk,memory', $start = null, $end = null) {
         if (!$start) {
-            $start = date('Y-m-d\TH:i:s\Z', strtotime('-1 hour'));
+            $start = date('Y-m-d\TH:i:s\Z', strtotime('-5 minutes'));
         }
         if (!$end) {
             $end = date('Y-m-d\TH:i:s\Z');
@@ -27,10 +27,52 @@ class Hetzner_API {
             'type' => $type,
             'start' => $start,
             'end' => $end,
-            'step' => '60'
+            'step' => '30'
         ]);
 
-        return $this->make_request('GET', "/servers/{$server_id}/metrics?{$query}");
+        $response = $this->make_request('GET', "/servers/{$server_id}/metrics?{$query}");
+        
+        if (isset($response['metrics'])) {
+            $metrics = $response['metrics'];
+            $processed_metrics = [];
+
+            // Process CPU metrics
+            if (isset($metrics['cpu'])) {
+                $cpu_values = $metrics['cpu']['values'];
+                if (!empty($cpu_values)) {
+                    $latest_cpu = end($cpu_values)[1]; // Get the last value
+                    $processed_metrics['cpu'] = round($latest_cpu * 100, 2); // Convert to percentage
+                }
+            }
+
+            // Process Memory metrics
+            if (isset($metrics['memory'])) {
+                $memory_values = $metrics['memory']['values'];
+                if (!empty($memory_values)) {
+                    $latest_memory = end($memory_values)[1];
+                    $processed_metrics['memory'] = round($latest_memory * 100, 2);
+                }
+            }
+
+            // Process Disk metrics
+            if (isset($metrics['disk'])) {
+                $disk_values = $metrics['disk']['values'];
+                if (!empty($disk_values)) {
+                    $latest_disk = end($disk_values)[1];
+                    $processed_metrics['disk'] = round($latest_disk * 100, 2);
+                }
+            }
+
+            return [
+                'success' => true,
+                'metrics' => $processed_metrics
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => 'Failed to fetch metrics'
+        ];
     }
 
     public function get_server_status($server_id) {

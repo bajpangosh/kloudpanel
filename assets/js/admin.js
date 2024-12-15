@@ -312,19 +312,25 @@ jQuery(document).ready(function($) {
         if (!card.length) return;
 
         // Update CPU Usage
-        const cpuUsage = calculateMetricValue(metrics.cpu);
+        const cpuUsage = metrics.cpu || 0;
         card.find('.cpu-usage').text(cpuUsage + '%');
         card.find('.cpu-progress').css('width', cpuUsage + '%');
+        card.find('.cpu-progress').toggleClass('high', cpuUsage > 80)
+                                 .toggleClass('medium', cpuUsage > 60 && cpuUsage <= 80);
 
         // Update Memory Usage
-        const memoryUsage = calculateMetricValue(metrics.memory);
+        const memoryUsage = metrics.memory || 0;
         card.find('.memory-usage').text(memoryUsage + '%');
         card.find('.memory-progress').css('width', memoryUsage + '%');
+        card.find('.memory-progress').toggleClass('high', memoryUsage > 80)
+                                    .toggleClass('medium', memoryUsage > 60 && memoryUsage <= 80);
 
         // Update Disk Usage
-        const diskUsage = calculateMetricValue(metrics.disk);
+        const diskUsage = metrics.disk || 0;
         card.find('.disk-usage').text(diskUsage + '%');
         card.find('.disk-progress').css('width', diskUsage + '%');
+        card.find('.disk-progress').toggleClass('high', diskUsage > 80)
+                                  .toggleClass('medium', diskUsage > 60 && diskUsage <= 80);
     }
 
     function calculateMetricValue(metricData) {

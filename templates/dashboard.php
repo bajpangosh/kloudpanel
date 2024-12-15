@@ -401,6 +401,29 @@ if (!defined('ABSPATH')) {
     background: #dc2626;
 }
 
+.progress {
+    height: 4px;
+    background-color: #4CAF50;
+    transition: width 0.3s ease-in-out;
+}
+
+.progress.medium {
+    background-color: #FFA726;
+}
+
+.progress.high {
+    background-color: #EF5350;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 4px;
+    background-color: #f0f0f0;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
 /* Empty State */
 .no-servers {
     text-align: center;
