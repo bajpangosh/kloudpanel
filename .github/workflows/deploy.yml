@@ -7,15 +7,55 @@ on:
 env:
   SSH_USER: ${{ secrets.SSH_USER }}
   SSH_HOST: ${{ secrets.SSH_HOST }}
+  PLUGIN_PATH: "/www/wwwroot/dev.kloudboy.com/wp-content/plugins"
 
 jobs:
-  deploy:
-    name: Deploy WordPress Plugin on Digital Ocean
+  test-connection:
+    name: Test Server Connection
     runs-on: ubuntu-20.04
+    steps:
+      - name: Set SSH Connection
+        run: |
+          mkdir -p ~/.ssh/
+          echo "$SSH_KEY" > ~/.ssh/deploy.key
+          chmod 600 ~/.ssh/deploy.key
+          cat >>~/.ssh/config <<END
+          Host digitalocean
+            HostName $SSH_HOST
+            User $SSH_USER
+            IdentityFile ~/.ssh/deploy.key
+            StrictHostKeyChecking no
+          END
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_KEY }}
+
+      - name: Test SSH Connection
+        run: |
+          if ssh digitalocean "echo 'Connection successful!'"; then
+            echo "✅ SSH connection test passed"
+          else
+            echo "❌ SSH connection test failed"
+            exit 1
+          fi
+
+      - name: Test WordPress Directory Access
+        run: |
+          if ssh digitalocean "[ -d /www/wwwroot/dev.kloudboy.com/wp-content/plugins ]"; then
+            echo "✅ WordPress plugins directory exists and is accessible"
+          else
+            echo "❌ WordPress plugins directory not found or not accessible"
+            exit 1
+          fi
+
+  deploy:
+    name: Deploy WordPress Plugin
+    needs: test-connection
+    runs-on: ubuntu-20.04
+    if: success()
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set SSH Connection
         run: |
@@ -32,14 +72,53 @@ jobs:
         env:
           SSH_KEY: ${{ secrets.DEPLOY_KEY }}
 
+      - name: Check destination directory
+        run: |
+          ssh digitalocean "[ -d ${{ env.PLUGIN_PATH }} ] || mkdir -p ${{ env.PLUGIN_PATH }}"
+
       - name: Sync plugin files
-        run: "rsync --delete -avO
-          --exclude /deploy_key \
-          --exclude /.git/ \
-          --exclude /.github/ \
-          ./ ${{ env.SSH_USER }}@${{ env.SSH_HOST }}:${{ env.DEST }}"
-        env:
-          SSH_HOST: digitalocean
-          # That's the most commom path in a WordPress instalation on a LAMP stack,
-          # but you can change the destination according to your needs.
-          DEST: "/www/wwwroot/dev.kloudboy.com/wp-content/plugins"
+        run: |
+          # First remove the existing kloudpanel plugin if it exists
+          ssh digitalocean "rm -rf ${{ env.PLUGIN_PATH }}/kloudpanel"
+          
+          # Then sync only our plugin files
+          rsync -av \
+            --exclude /deploy_key \
+            --exclude /.git/ \
+            --exclude /.github/ \
+            --exclude /node_modules/ \
+            --exclude /.DS_Store \
+            ./ ${{ env.SSH_USER }}@${{ env.SSH_HOST }}:${{ env.PLUGIN_PATH }}/kloudpanel/
+
+      - name: Set file permissions
+        run: |
+          ssh digitalocean "chmod -R 755 ${{ env.PLUGIN_PATH }}/kloudpanel"
+          ssh digitalocean "chown -R www-data:www-data ${{ env.PLUGIN_PATH }}/kloudpanel"
+
+      - name: Deployment status
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { status, conclusion } = context.job
+            const state = conclusion || status
+            
+            if (state === 'success') {
+              github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: context.sha,
+                state: 'success',
+                description: 'Plugin deployed successfully',
+                context: 'Deploy to Digital Ocean'
+              })
+            } else {
+              github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: context.sha,
+                state: 'failure',
+                description: 'Plugin deployment failed',
+                context: 'Deploy to Digital Ocean'
+              })
+            }
