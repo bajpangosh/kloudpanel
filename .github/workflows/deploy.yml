@@ -1,0 +1,88 @@
+name: Deploy WordPress Plugin
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+
+jobs:
+  deploy:
+    name: Deploy to Development Server
+    runs-on: ubuntu-latest
+
+    env:
+      PLUGIN_NAME: kloudpanel
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          extensions: mbstring, xml, zip
+
+      - name: Create plugin archive
+        run: |
+          mkdir -p build
+          zip -r "build/${{ env.PLUGIN_NAME }}.zip" . -x "*.git*" "*.github*" "build*" "tests*" "*.DS_Store"
+
+      - name: Install SSH key
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+      - name: Deploy to server
+        env:
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_PATH: ${{ secrets.REMOTE_PATH }}
+        run: |
+          # Upload the plugin zip file
+          scp "build/${{ env.PLUGIN_NAME }}.zip" ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }}:${{ env.REMOTE_PATH }}
+
+          # SSH commands to handle plugin installation
+          ssh ${{ env.REMOTE_USER }}@${{ env.REMOTE_HOST }} "
+            cd ${{ env.REMOTE_PATH }} && \
+            # Deactivate existing plugin if it exists
+            wp plugin deactivate ${{ env.PLUGIN_NAME }} --allow-root || true && \
+            # Remove existing plugin directory
+            rm -rf wp-content/plugins/${{ env.PLUGIN_NAME }} && \
+            # Unzip new plugin
+            unzip -o ${{ env.PLUGIN_NAME }}.zip -d wp-content/plugins/ && \
+            # Activate plugin
+            wp plugin activate ${{ env.PLUGIN_NAME }} --allow-root && \
+            # Cleanup zip file
+            rm ${{ env.PLUGIN_NAME }}.zip && \
+            # Clear cache
+            wp cache flush --allow-root
+          "
+
+      - name: Notify on success
+        if: success()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.name,
+              body: '✅ Plugin successfully deployed to development server!'
+            })
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.name,
+              body: '❌ Plugin deployment failed. Please check the workflow logs.'
+            })
