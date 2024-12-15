@@ -266,12 +266,16 @@ jQuery(document).ready(function($) {
                 if (response.success) {
                     updateDashboard(response.data);
                     updateLastUpdateTime();
+                    hideError();
                 } else {
                     showError(response.data.message || 'Failed to fetch server data');
                 }
             },
-            error: function() {
-                showError('Failed to connect to the server');
+            error: function(xhr, status, error) {
+                console.error('Ajax error:', error);
+                console.error('Status:', status);
+                console.error('Response:', xhr.responseText);
+                showError('Failed to connect to the server. Please check the browser console and WordPress debug log for details.');
             },
             complete: function() {
                 if (showProgress) {
@@ -364,6 +368,24 @@ jQuery(document).ready(function($) {
         const progressBar = $('.progress-value');
         progressBar.css('width', '0%');
         progressBar.animate({ width: '100%' }, 1000);
+    }
+
+    function showError(message) {
+        const errorHtml = `
+            <div class="notice notice-error">
+                <p>${message}</p>
+            </div>
+        `;
+        
+        // Remove any existing error messages
+        $('.kloudpanel-dashboard .notice').remove();
+        
+        // Add the new error message at the top of the dashboard
+        $('.kloudpanel-dashboard .dashboard-header').after(errorHtml);
+    }
+
+    function hideError() {
+        $('.kloudpanel-dashboard .notice').remove();
     }
 
     // Initialize dashboard if we're on the dashboard page

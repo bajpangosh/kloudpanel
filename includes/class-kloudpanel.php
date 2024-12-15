@@ -102,84 +102,117 @@ class KloudPanel {
     }
 
     public function ajax_get_servers_data() {
-        check_ajax_referer('kloudpanel_nonce', 'nonce');
+        try {
+            check_ajax_referer('kloudpanel_nonce', 'nonce');
 
-        $api_token = $this->get_api_token();
-        if (!$api_token) {
-            wp_send_json_error(['message' => 'API token not configured']);
-            return;
-        }
-
-        $api = new Hetzner_API($api_token);
-        $response = $api->get_servers();
-
-        if (!isset($response['servers'])) {
-            wp_send_json_error(['message' => 'Failed to fetch servers']);
-            return;
-        }
-
-        $servers = $response['servers'];
-        $costs = $api->calculate_server_costs($servers);
-
-        if (!$costs['success']) {
-            wp_send_json_error(['message' => 'Failed to calculate costs']);
-            return;
-        }
-
-        $server_data = [];
-        foreach ($servers as $server) {
-            // Find cost data for this server
-            $server_cost = null;
-            foreach ($costs['data']['server_costs'] as $cost) {
-                if ($cost['id'] === $server['id']) {
-                    $server_cost = $cost;
-                    break;
-                }
+            error_log('KloudPanel: Fetching server data');
+            
+            $api_token = $this->get_api_token();
+            if (!$api_token) {
+                error_log('KloudPanel Error: API token not configured');
+                wp_send_json_error(['message' => 'API token not configured']);
+                return;
             }
 
-            $server_data[] = [
-                'id' => $server['id'],
-                'name' => $server['name'],
-                'status' => $server['status'],
-                'ip' => $server['public_net']['ipv4']['ip'],
-                'type' => $server['server_type']['name'],
-                'datacenter' => $server['datacenter']['location']['name'],
-                'hourlyCost' => $server_cost ? $server_cost['hourly'] : 0,
-                'monthlyCost' => $server_cost ? $server_cost['monthly'] : 0
-            ];
-        }
+            $api = new Hetzner_API($api_token);
+            error_log('KloudPanel: Initialized Hetzner API');
+            
+            $response = $api->get_servers();
+            error_log('KloudPanel Debug: Server response - ' . print_r($response, true));
 
-        wp_send_json_success([
-            'servers' => $server_data,
-            'summary' => [
-                'total_hourly' => $costs['data']['total_hourly'],
-                'total_monthly' => $costs['data']['total_monthly']
-            ]
-        ]);
+            if (!isset($response['servers'])) {
+                error_log('KloudPanel Error: Failed to fetch servers - ' . print_r($response, true));
+                wp_send_json_error(['message' => 'Failed to fetch servers']);
+                return;
+            }
+
+            $servers = $response['servers'];
+            error_log('KloudPanel: Got ' . count($servers) . ' servers');
+            
+            $costs = $api->calculate_server_costs($servers);
+            error_log('KloudPanel Debug: Cost calculation response - ' . print_r($costs, true));
+
+            if (!$costs['success']) {
+                error_log('KloudPanel Error: Failed to calculate costs - ' . print_r($costs, true));
+                wp_send_json_error(['message' => 'Failed to calculate costs']);
+                return;
+            }
+
+            $server_data = [];
+            foreach ($servers as $server) {
+                // Find cost data for this server
+                $server_cost = null;
+                foreach ($costs['data']['server_costs'] as $cost) {
+                    if ($cost['id'] === $server['id']) {
+                        $server_cost = $cost;
+                        break;
+                    }
+                }
+
+                $server_data[] = [
+                    'id' => $server['id'],
+                    'name' => $server['name'],
+                    'status' => $server['status'],
+                    'ip' => $server['public_net']['ipv4']['ip'],
+                    'type' => $server['server_type']['name'],
+                    'datacenter' => $server['datacenter']['location']['name'],
+                    'hourlyCost' => $server_cost ? $server_cost['hourly'] : 0,
+                    'monthlyCost' => $server_cost ? $server_cost['monthly'] : 0
+                ];
+            }
+
+            error_log('KloudPanel: Processed server data - ' . count($server_data) . ' servers');
+
+            wp_send_json_success([
+                'servers' => $server_data,
+                'summary' => [
+                    'total_hourly' => $costs['data']['total_hourly'],
+                    'total_monthly' => $costs['data']['total_monthly']
+                ]
+            ]);
+
+        } catch (Exception $e) {
+            error_log('KloudPanel Error: ' . $e->getMessage());
+            error_log('KloudPanel Error Stack Trace: ' . $e->getTraceAsString());
+            wp_send_json_error(['message' => 'Internal server error']);
+        }
     }
 
     public function ajax_get_server_metrics() {
-        check_ajax_referer('kloudpanel_nonce', 'nonce');
+        try {
+            check_ajax_referer('kloudpanel_nonce', 'nonce');
 
-        $server_id = isset($_POST['server_id']) ? intval($_POST['server_id']) : 0;
-        if (!$server_id) {
-            wp_send_json_error(['message' => 'Invalid server ID']);
-            return;
-        }
+            error_log('KloudPanel: Fetching server metrics');
 
-        $api_token = $this->get_api_token();
-        if (!$api_token) {
-            wp_send_json_error(['message' => 'API token not configured']);
-            return;
-        }
+            $server_id = isset($_POST['server_id']) ? intval($_POST['server_id']) : 0;
+            if (!$server_id) {
+                error_log('KloudPanel Error: Invalid server ID');
+                wp_send_json_error(['message' => 'Invalid server ID']);
+                return;
+            }
 
-        $api = new Hetzner_API($api_token);
-        $metrics = $api->get_server_metrics($server_id);
+            $api_token = $this->get_api_token();
+            if (!$api_token) {
+                error_log('KloudPanel Error: API token not configured for metrics');
+                wp_send_json_error(['message' => 'API token not configured']);
+                return;
+            }
 
-        if (isset($metrics['metrics'])) {
-            wp_send_json_success($metrics['metrics']);
-        } else {
-            wp_send_json_error(['message' => 'Failed to fetch server metrics']);
+            $api = new Hetzner_API($api_token);
+            $metrics = $api->get_server_metrics($server_id);
+            error_log('KloudPanel Debug: Metrics response - ' . print_r($metrics, true));
+
+            if (isset($metrics['metrics'])) {
+                wp_send_json_success($metrics['metrics']);
+            } else {
+                error_log('KloudPanel Error: Failed to fetch metrics - ' . print_r($metrics, true));
+                wp_send_json_error(['message' => 'Failed to fetch server metrics']);
+            }
+
+        } catch (Exception $e) {
+            error_log('KloudPanel Metrics Error: ' . $e->getMessage());
+            error_log('KloudPanel Metrics Error Stack Trace: ' . $e->getTraceAsString());
+            wp_send_json_error(['message' => 'Internal server error']);
         }
     }
 
