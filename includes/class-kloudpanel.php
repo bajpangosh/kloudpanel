@@ -6,7 +6,7 @@ class KloudPanel {
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         add_action('wp_ajax_get_server_status', array($this, 'ajax_get_server_status'));
-        add_action('wp_ajax_save_api_token', array($this, 'ajax_save_api_token'));
+        add_action('admin_post_kloudpanel_save_token', array($this, 'handle_save_token'));
         
         // Initialize Hetzner API if token exists
         $api_token = $this->get_api_token();
@@ -63,6 +63,43 @@ class KloudPanel {
         include KLOUDPANEL_PLUGIN_DIR . 'templates/settings.php';
     }
 
+    public function handle_save_token() {
+        if (!current_user_can('manage_options')) {
+            wp_die('Unauthorized');
+        }
+
+        check_admin_referer('kloudpanel_save_token', 'kloudpanel_nonce');
+
+        $api_token = sanitize_text_field($_POST['api_token']);
+        
+        if (empty($api_token)) {
+            add_settings_error('kloudpanel', 'empty_token', 'API token cannot be empty');
+            wp_redirect(admin_url('admin.php?page=kloudpanel-settings'));
+            exit;
+        }
+
+        // Verify the token by making a test API call
+        $test_api = new Hetzner_API($api_token);
+        $test_response = $test_api->get_servers();
+
+        if (isset($test_response['error'])) {
+            add_settings_error('kloudpanel', 'invalid_token', 'Invalid API token. Please check and try again.');
+            wp_redirect(admin_url('admin.php?page=kloudpanel-settings'));
+            exit;
+        }
+
+        global $wpdb;
+        $wpdb->query('TRUNCATE TABLE ' . $wpdb->prefix . 'kloudpanel_hetzner_api');
+        $wpdb->insert(
+            $wpdb->prefix . 'kloudpanel_hetzner_api',
+            array('api_token' => $api_token),
+            array('%s')
+        );
+
+        wp_redirect(admin_url('admin.php?page=kloudpanel-settings&saved=1'));
+        exit;
+    }
+
     public function ajax_get_server_status() {
         check_ajax_referer('kloudpanel-nonce', 'nonce');
         
@@ -89,26 +126,6 @@ class KloudPanel {
         }
 
         wp_send_json_success($server_data);
-    }
-
-    public function ajax_save_api_token() {
-        check_ajax_referer('kloudpanel-nonce', 'nonce');
-        
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('Unauthorized');
-        }
-
-        $api_token = sanitize_text_field($_POST['api_token']);
-        
-        global $wpdb;
-        $wpdb->query('TRUNCATE TABLE ' . $wpdb->prefix . 'kloudpanel_hetzner_api');
-        $wpdb->insert(
-            $wpdb->prefix . 'kloudpanel_hetzner_api',
-            array('api_token' => $api_token),
-            array('%s')
-        );
-
-        wp_send_json_success('API token saved successfully');
     }
 
     private function get_api_token() {

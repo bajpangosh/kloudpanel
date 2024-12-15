@@ -6,12 +6,24 @@ if (!defined('ABSPATH')) {
 <div class="wrap">
     <h1>KloudPanel Settings</h1>
     
+    <?php
+    // Show success message
+    if (isset($_GET['saved'])) {
+        echo '<div class="notice notice-success is-dismissible"><p>Settings saved successfully!</p></div>';
+    }
+    
+    // Show error messages
+    settings_errors('kloudpanel');
+    ?>
+    
     <div class="card">
         <h2>Hetzner Cloud API Token</h2>
         <p>Enter your Hetzner Cloud API token to connect to your servers.</p>
         
-        <form id="kloudpanel-settings-form">
-            <?php wp_nonce_field('kloudpanel-nonce'); ?>
+        <form method="post" action="<?php echo admin_url('admin-post.php'); ?>">
+            <?php wp_nonce_field('kloudpanel_save_token', 'kloudpanel_nonce'); ?>
+            <input type="hidden" name="action" value="kloudpanel_save_token">
+            
             <table class="form-table">
                 <tr>
                     <th scope="row">
