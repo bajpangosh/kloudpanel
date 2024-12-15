@@ -2,7 +2,7 @@
 /**
  * Plugin Name: KloudPanel
  * Plugin URI: https://github.com/bajpangosh/kloudpanel
- * Description: A beautiful dashboard to monitor your CyberPanel instances
+ * Description: A beautiful dashboard to monitor your Hetzner Cloud instances
  * Version: 1.0.0
  * Author: BajPanGosh
  * Author URI: https://github.com/bajpangosh
@@ -21,7 +21,7 @@ define('KLOUDPANEL_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 // Include required files
 require_once KLOUDPANEL_PLUGIN_DIR . 'includes/class-kloudpanel.php';
-require_once KLOUDPANEL_PLUGIN_DIR . 'includes/class-kloudpanel-api.php';
+require_once KLOUDPANEL_PLUGIN_DIR . 'includes/class-hetzner-api.php';
 
 // Initialize the plugin
 function kloudpanel_init() {
@@ -37,11 +37,9 @@ function kloudpanel_activate() {
     global $wpdb;
     $charset_collate = $wpdb->get_charset_collate();
     
-    $sql = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}kloudpanel_instances (
+    $sql = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}kloudpanel_hetzner_api (
         id mediumint(9) NOT NULL AUTO_INCREMENT,
-        name varchar(100) NOT NULL,
-        url varchar(255) NOT NULL,
-        api_key varchar(255) NOT NULL,
+        api_token varchar(255) NOT NULL,
         created_at datetime DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY  (id)
     ) $charset_collate;";

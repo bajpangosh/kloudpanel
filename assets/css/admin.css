@@ -1,3 +1,145 @@
+/* KloudPanel Admin Styles */
+
+/* Cards */
+.card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+/* Status Colors */
+.status-running {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status-stopped {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.status-starting {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+/* Progress Bars */
+.progress-bar {
+    background: #e5e7eb;
+    border-radius: 9999px;
+    height: 8px;
+    overflow: hidden;
+}
+
+.progress-bar .progress {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.progress-bar .progress.low {
+    background: #2271b1;
+}
+
+.progress-bar .progress.medium {
+    background: #f59e0b;
+}
+
+.progress-bar .progress.high {
+    background: #dc2626;
+}
+
+/* Buttons */
+.kloudpanel-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.kloudpanel-btn:hover {
+    transform: translateY(-1px);
+}
+
+.kloudpanel-btn-primary {
+    background: #2271b1;
+    color: white;
+    border: none;
+}
+
+.kloudpanel-btn-primary:hover {
+    background: #135e96;
+}
+
+.kloudpanel-btn-secondary {
+    background: white;
+    color: #374151;
+    border: 1px solid #d1d5db;
+}
+
+.kloudpanel-btn-secondary:hover {
+    background: #f9fafb;
+}
+
+/* Forms */
+.kloudpanel-form-group {
+    margin-bottom: 1.5rem;
+}
+
+.kloudpanel-form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+.kloudpanel-form-input {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+}
+
+.kloudpanel-form-input:focus {
+    outline: none;
+    border-color: #2271b1;
+    box-shadow: 0 0 0 2px rgba(34, 113, 177, 0.2);
+}
+
+/* Animations */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+/* Responsive Grid */
+@media (max-width: 768px) {
+    .kloudpanel-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .kloudpanel-summary {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+}
+
 .kloudpanel-dashboard {
     padding: 20px;
 }

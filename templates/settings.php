@@ -4,30 +4,66 @@ if (!defined('ABSPATH')) {
 }
 ?>
 <div class="wrap">
-    <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
+    <h1>KloudPanel Settings</h1>
     
-    <form method="post" action="options.php">
-        <?php
-        settings_fields('kloudpanel_settings');
-        do_settings_sections('kloudpanel_settings');
-        ?>
+    <div class="card">
+        <h2>Hetzner Cloud API Token</h2>
+        <p>Enter your Hetzner Cloud API token to connect to your servers.</p>
         
-        <table class="form-table">
-            <tr>
-                <th scope="row">
-                    <label for="refresh_interval">Dashboard Refresh Interval</label>
-                </th>
-                <td>
-                    <select name="kloudpanel_refresh_interval" id="refresh_interval">
-                        <option value="30">30 seconds</option>
-                        <option value="60">1 minute</option>
-                        <option value="300">5 minutes</option>
-                        <option value="600">10 minutes</option>
-                    </select>
-                </td>
-            </tr>
-        </table>
-        
-        <?php submit_button(); ?>
-    </form>
+        <form id="kloudpanel-settings-form">
+            <?php wp_nonce_field('kloudpanel-nonce'); ?>
+            <table class="form-table">
+                <tr>
+                    <th scope="row">
+                        <label for="api_token">API Token</label>
+                    </th>
+                    <td>
+                        <input type="password" 
+                               id="api_token" 
+                               name="api_token" 
+                               class="regular-text"
+                               value="<?php echo esc_attr($this->get_api_token()); ?>"
+                               required>
+                        <p class="description">
+                            Generate an API token from your <a href="https://console.hetzner.cloud/projects" target="_blank">Hetzner Cloud Console</a>
+                        </p>
+                    </td>
+                </tr>
+            </table>
+            
+            <p class="submit">
+                <button type="submit" class="button button-primary">Save Changes</button>
+            </p>
+        </form>
+    </div>
 </div>
+
+<script>
+jQuery(document).ready(function($) {
+    $('#kloudpanel-settings-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        var formData = new FormData(this);
+        formData.append('action', 'save_api_token');
+        formData.append('nonce', kloudpanel.nonce);
+        
+        $.ajax({
+            url: kloudpanel.ajax_url,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    alert('Settings saved successfully!');
+                    window.location.reload();
+                } else {
+                    alert('Error saving settings: ' + response.data);
+                }
+            },
+            error: function() {
+                alert('Error saving settings. Please try again.');
+            }
+        });
+    });
+});

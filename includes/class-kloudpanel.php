@@ -1,144 +1,119 @@
 <?php
 class KloudPanel {
-    private $version;
-
-    public function __construct() {
-        $this->version = KLOUDPANEL_VERSION;
-    }
+    private $hetzner_api;
 
     public function init() {
-        // Add menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
+        add_action('wp_ajax_get_server_status', array($this, 'ajax_get_server_status'));
+        add_action('wp_ajax_save_api_token', array($this, 'ajax_save_api_token'));
         
-        // Add AJAX handlers
-        add_action('wp_ajax_kloudpanel_add_instance', array($this, 'ajax_add_instance'));
-        add_action('wp_ajax_kloudpanel_delete_instance', array($this, 'ajax_delete_instance'));
-        add_action('wp_ajax_kloudpanel_check_instance_status', array($this, 'ajax_check_instance_status'));
-        
-        // Add scripts and styles
-        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+        // Initialize Hetzner API if token exists
+        $api_token = $this->get_api_token();
+        if ($api_token) {
+            $this->hetzner_api = new Hetzner_API($api_token);
+        }
     }
 
     public function add_admin_menu() {
         add_menu_page(
-            'KloudPanel', 
+            'KloudPanel',
             'KloudPanel',
             'manage_options',
             'kloudpanel',
-            array($this, 'render_dashboard_page'),
+            array($this, 'render_dashboard'),
             'dashicons-cloud',
             30
         );
 
         add_submenu_page(
             'kloudpanel',
-            'Add Instance',
-            'Add Instance',
+            'Settings',
+            'Settings',
             'manage_options',
-            'kloudpanel-add-instance',
-            array($this, 'render_add_instance_page')
+            'kloudpanel-settings',
+            array($this, 'render_settings')
         );
     }
 
-    public function enqueue_admin_assets($hook) {
+    public function enqueue_admin_scripts($hook) {
         if (strpos($hook, 'kloudpanel') === false) {
             return;
         }
 
-        wp_enqueue_style(
-            'kloudpanel-admin',
-            KLOUDPANEL_PLUGIN_URL . 'assets/css/admin.css',
-            array(),
-            $this->version
-        );
-
-        wp_enqueue_script(
-            'kloudpanel-admin',
-            KLOUDPANEL_PLUGIN_URL . 'assets/js/admin.js',
-            array('jquery'),
-            $this->version,
-            true
-        );
-
-        wp_localize_script('kloudpanel-admin', 'kloudpanelData', array(
-            'ajaxUrl' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('kloudpanel_nonce')
+        wp_enqueue_style('kloudpanel-admin', KLOUDPANEL_PLUGIN_URL . 'assets/css/admin.css', array(), KLOUDPANEL_VERSION);
+        wp_enqueue_script('chart-js', 'https://cdn.jsdelivr.net/npm/chart.js', array(), '3.7.0', true);
+        wp_enqueue_script('kloudpanel-admin', KLOUDPANEL_PLUGIN_URL . 'assets/js/admin.js', array('jquery', 'chart-js'), KLOUDPANEL_VERSION, true);
+        
+        wp_localize_script('kloudpanel-admin', 'kloudpanel', array(
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('kloudpanel-nonce')
         ));
     }
 
-    public function render_dashboard_page() {
+    public function render_dashboard() {
+        if (!$this->get_api_token()) {
+            echo '<div class="wrap"><div class="notice notice-warning"><p>Please configure your Hetzner API token in the settings first.</p></div></div>';
+            return;
+        }
         include KLOUDPANEL_PLUGIN_DIR . 'templates/dashboard.php';
     }
 
-    public function render_add_instance_page() {
-        include KLOUDPANEL_PLUGIN_DIR . 'templates/add-instance.php';
+    public function render_settings() {
+        include KLOUDPANEL_PLUGIN_DIR . 'templates/settings.php';
     }
 
-    public function ajax_add_instance() {
-        check_ajax_referer('kloudpanel_add_instance', 'nonce');
-
+    public function ajax_get_server_status() {
+        check_ajax_referer('kloudpanel-nonce', 'nonce');
+        
         if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => 'Permission denied'));
+            wp_send_json_error('Unauthorized');
         }
 
-        $instance_name = sanitize_text_field($_POST['instance_name']);
-        $instance_url = esc_url_raw($_POST['instance_url']);
-        $api_key = sanitize_text_field($_POST['api_key']);
+        $servers = $this->hetzner_api->get_servers();
+        $server_data = array();
 
-        if (empty($instance_name) || empty($instance_url) || empty($api_key)) {
-            wp_send_json_error(array('message' => 'All fields are required'));
+        if (isset($servers['servers'])) {
+            foreach ($servers['servers'] as $server) {
+                $metrics = $this->hetzner_api->get_server_metrics($server['id']);
+                $server_data[] = array(
+                    'id' => $server['id'],
+                    'name' => $server['name'],
+                    'status' => $server['status'],
+                    'ip' => $server['public_net']['ipv4']['ip'],
+                    'type' => $server['server_type']['name'],
+                    'datacenter' => $server['datacenter']['name'],
+                    'metrics' => $metrics
+                );
+            }
         }
 
-        $instances = get_option('kloudpanel_instances', array());
-        $instance_id = uniqid('cp_');
+        wp_send_json_success($server_data);
+    }
 
-        $instances[$instance_id] = array(
-            'name' => $instance_name,
-            'url' => $instance_url,
-            'api_key' => $api_key
+    public function ajax_save_api_token() {
+        check_ajax_referer('kloudpanel-nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Unauthorized');
+        }
+
+        $api_token = sanitize_text_field($_POST['api_token']);
+        
+        global $wpdb;
+        $wpdb->query('TRUNCATE TABLE ' . $wpdb->prefix . 'kloudpanel_hetzner_api');
+        $wpdb->insert(
+            $wpdb->prefix . 'kloudpanel_hetzner_api',
+            array('api_token' => $api_token),
+            array('%s')
         );
 
-        update_option('kloudpanel_instances', $instances);
-        wp_send_json_success();
+        wp_send_json_success('API token saved successfully');
     }
 
-    public function ajax_delete_instance() {
-        check_ajax_referer('kloudpanel_add_instance', 'nonce');
-
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => 'Permission denied'));
-        }
-
-        $instance_id = sanitize_text_field($_POST['instance_id']);
-        $instances = get_option('kloudpanel_instances', array());
-
-        if (isset($instances[$instance_id])) {
-            unset($instances[$instance_id]);
-            update_option('kloudpanel_instances', $instances);
-            wp_send_json_success();
-        }
-
-        wp_send_json_error(array('message' => 'Instance not found'));
-    }
-
-    public function ajax_check_instance_status() {
-        check_ajax_referer('kloudpanel_add_instance', 'nonce');
-
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => 'Permission denied'));
-        }
-
-        $instance_id = sanitize_text_field($_POST['instance_id']);
-        $instances = get_option('kloudpanel_instances', array());
-
-        if (!isset($instances[$instance_id])) {
-            wp_send_json_error(array('message' => 'Instance not found'));
-        }
-
-        $instance = $instances[$instance_id];
-        $api = new KloudPanel_API($instance['url'], $instance['api_key']);
-        $status = $api->get_system_status();
-
-        wp_send_json_success($status);
+    private function get_api_token() {
+        global $wpdb;
+        $token = $wpdb->get_var("SELECT api_token FROM {$wpdb->prefix}kloudpanel_hetzner_api ORDER BY id DESC LIMIT 1");
+        return $token;
     }
 }

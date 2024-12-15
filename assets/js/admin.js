@@ -1,12 +1,13 @@
+/* KloudPanel Admin JavaScript */
 jQuery(document).ready(function($) {
-    // Refresh dashboard data periodically
-    function refreshDashboard() {
+    // Server status update
+    function updateServerStatus() {
         $.ajax({
-            url: kloudpanelData.ajaxUrl,
+            url: kloudpanel.ajax_url,
             type: 'POST',
             data: {
-                action: 'kloudpanel_get_dashboard_data',
-                nonce: kloudpanelData.nonce
+                action: 'get_server_status',
+                nonce: kloudpanel.nonce
             },
             success: function(response) {
                 if (response.success) {
@@ -16,91 +17,149 @@ jQuery(document).ready(function($) {
         });
     }
 
-    function updateDashboard(data) {
-        // Update summary cards
-        $('#total-instances').text(data.total_instances);
-        $('#active-websites').text(data.active_websites);
-        $('#total-storage').text(data.total_storage);
+    // Update dashboard with server data
+    function updateDashboard(servers) {
+        const grid = $('#servers-grid');
+        grid.empty();
+        
+        $('#total-servers').text(servers.length);
+        
+        let runningServers = 0;
+        let totalCost = 0;
+        
+        servers.forEach(function(server) {
+            const card = createServerCard(server);
+            grid.append(card);
+            
+            if (server.status === 'running') {
+                runningServers++;
+                totalCost += parseFloat(server.price_hourly || 0);
+            }
+        });
+        
+        $('#running-servers').text(runningServers);
+        $('#total-cost').text('€' + totalCost.toFixed(2));
+    }
 
-        // Update instances list
-        const instancesList = $('#instances-list');
-        instancesList.empty();
+    // Create server card from template
+    function createServerCard(server) {
+        const template = document.getElementById('server-card-template');
+        const card = $(template.content.cloneNode(true));
+        
+        // Update basic info
+        card.find('.server-name').text(server.name);
+        card.find('.server-status')
+            .text(server.status)
+            .addClass(server.status);
+        card.find('.ip').text(server.ip);
+        card.find('.type').text(server.type);
+        card.find('.datacenter').text(server.datacenter);
+        
+        // Update metrics if available
+        if (server.metrics) {
+            updateMetrics(card, server.metrics);
+        }
+        
+        // Setup action buttons
+        setupActionButtons(card, server);
+        
+        return card;
+    }
 
-        data.instances.forEach(function(instance) {
-            instancesList.append(createInstanceCard(instance));
+    // Update server metrics
+    function updateMetrics(card, metrics) {
+        updateResourceBar(card, '.cpu-usage', '.cpu-value', metrics.cpu);
+        updateResourceBar(card, '.memory-usage', '.memory-value', metrics.memory);
+        updateResourceBar(card, '.disk-usage', '.disk-value', metrics.disk);
+    }
+
+    // Update resource usage bar
+    function updateResourceBar(card, barSelector, valueSelector, value) {
+        const percentage = Math.round(value * 100);
+        const bar = card.find(barSelector);
+        const valueElement = card.find(valueSelector);
+        
+        bar.css('width', percentage + '%')
+           .removeClass('low medium high')
+           .addClass(getResourceClass(percentage));
+           
+        valueElement.text(percentage + '%');
+    }
+
+    // Get resource usage class based on percentage
+    function getResourceClass(percentage) {
+        if (percentage < 50) return 'low';
+        if (percentage < 80) return 'medium';
+        return 'high';
+    }
+
+    // Setup server action buttons
+    function setupActionButtons(card, server) {
+        const consoleBtn = card.find('.console-btn');
+        const powerBtn = card.find('.power-btn');
+        
+        consoleBtn.attr('href', `https://console.hetzner.cloud/projects/${server.project_id}/servers/${server.id}/console`);
+        
+        powerBtn.text(server.status === 'running' ? 'Stop' : 'Start')
+                .addClass(server.status === 'running' ? 'button-secondary' : 'button-primary');
+                
+        powerBtn.on('click', function(e) {
+            e.preventDefault();
+            toggleServerPower(server.id, server.status);
         });
     }
 
-    function createInstanceCard(instance) {
-        return `
-            <div class="instance-card">
-                <div class="instance-header">
-                    <span class="instance-name">${instance.name}</span>
-                    <span class="instance-status status-${instance.status}">${instance.status}</span>
-                </div>
-                <div class="instance-stats">
-                    <div class="stat-item">
-                        <div class="stat-label">CPU Usage</div>
-                        <div class="stat-value">${instance.cpu_usage}%</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">Memory Usage</div>
-                        <div class="stat-value">${instance.memory_usage}%</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">Disk Usage</div>
-                        <div class="stat-value">${instance.disk_usage}%</div>
-                    </div>
-                    <div class="stat-item">
-                        <div class="stat-label">Websites</div>
-                        <div class="stat-value">${instance.websites_count}</div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    // Add Instance Form Handler
-    $('#add-instance-form').on('submit', function(e) {
-        e.preventDefault();
+    // Toggle server power state
+    function toggleServerPower(serverId, currentStatus) {
+        const action = currentStatus === 'running' ? 'poweroff' : 'poweron';
         
-        const formData = {
-            action: 'kloudpanel_add_instance',
-            nonce: kloudpanelData.nonce,
-            name: $('#instance-name').val(),
-            url: $('#instance-url').val(),
-            api_key: $('#instance-api-key').val()
-        };
-
         $.ajax({
-            url: kloudpanelData.ajaxUrl,
+            url: kloudpanel.ajax_url,
             type: 'POST',
-            data: formData,
+            data: {
+                action: 'toggle_server_power',
+                nonce: kloudpanel.nonce,
+                server_id: serverId,
+                power_action: action
+            },
             success: function(response) {
                 if (response.success) {
-                    closeModal();
-                    refreshDashboard();
+                    updateServerStatus();
                 } else {
-                    alert(response.data.message);
+                    alert('Failed to change server power state: ' + response.data);
+                }
+            }
+        });
+    }
+
+    // Settings page form handler
+    $('#kloudpanel-settings-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        formData.append('action', 'save_api_token');
+        formData.append('nonce', kloudpanel.nonce);
+        
+        $.ajax({
+            url: kloudpanel.ajax_url,
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    alert('Settings saved successfully!');
+                    window.location.reload();
+                } else {
+                    alert('Error saving settings: ' + response.data);
                 }
             }
         });
     });
 
-    // Modal Functions
-    window.openModal = function() {
-        $('#add-instance-modal').show();
+    // Initialize dashboard updates
+    if ($('#servers-grid').length) {
+        updateServerStatus();
+        setInterval(updateServerStatus, 30000);
     }
-
-    window.closeModal = function() {
-        $('#add-instance-modal').hide();
-        $('#add-instance-form')[0].reset();
-    }
-
-    // Initial load
-    refreshDashboard();
-
-    // Set up refresh interval
-    const refreshInterval = parseInt($('#refresh_interval').val()) || 60;
-    setInterval(refreshDashboard, refreshInterval * 1000);
 });
