@@ -18,19 +18,28 @@ jQuery(document).ready(function($) {
             url: kloudpanel.ajax_url,
             type: 'POST',
             data: {
-                action: 'get_server_status',
+                action: 'get_servers_data',
                 nonce: kloudpanel.nonce
             },
             success: function(response) {
                 if (response.success) {
                     updateDashboard(response.data);
                     updateLastUpdateTime();
+                    hideError();
                 } else {
-                    showError('Failed to fetch server data');
+                    const errorMsg = response.data ? response.data.message : 'Failed to fetch server data';
+                    showError(errorMsg);
+                    if (kloudpanel.debug) {
+                        console.error('Server Error:', response);
+                    }
                 }
             },
-            error: function() {
-                showError('Failed to connect to the server');
+            error: function(xhr, status, error) {
+                const errorMsg = 'Failed to connect to the server';
+                showError(errorMsg);
+                if (kloudpanel.debug) {
+                    console.error('AJAX Error:', {xhr, status, error});
+                }
             },
             complete: function() {
                 isLoading = false;

@@ -48,7 +48,8 @@ class KloudPanel {
         
         wp_localize_script('kloudpanel-admin', 'kloudpanel', array(
             'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('kloudpanel-nonce')
+            'nonce' => wp_create_nonce('kloudpanel_nonce'),
+            'debug' => WP_DEBUG
         ));
     }
 
