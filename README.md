@@ -38,17 +38,7 @@ KloudPanel is a lightweight, modern hosting control panel specifically designed 
 ## Quick Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/kloudpanel.git
-
-# Navigate to the directory
-cd kloudpanel
-
-# Make the installation script executable
-chmod +x install.sh
-
-# Run the installation script
-sudo ./install.sh
+curl -s https://raw.githubusercontent.com/bajpangosh/kloudpanel/main/install.sh | sudo bash
 ```
 
 ## Access the Panel
@@ -149,8 +139,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Author
 
-Your Name - [@yourusername](https://github.com/yourusername)
+[Bajpan Gosh](https://github.com/bajpangosh)
 
 ## Support the Project
 
 ⭐️ Star this repository if you find it helpful!
+
+## Community & Support
+
+- 🌟 Star this repo
+- 🐞 Report issues [here](https://github.com/bajpangosh/kloudpanel/issues)
+- 💬 Join discussions [here](https://github.com/bajpangosh/kloudpanel/discussions)
+- 🤝 Contribute to the project
+
+## Stay Updated
+
+Watch this repository to stay updated with new features and improvements!
