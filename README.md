@@ -31,9 +31,11 @@ KloudPanel is a lightweight, modern hosting control panel specifically designed 
 ## System Requirements
 
 - Ubuntu 22.04 LTS (Recommended)
-- Minimum 2GB RAM
-- Minimum 2 CPU Cores
-- 20GB Free Disk Space
+- Minimum 512MB RAM
+- 1 CPU Core
+- 10GB Free Disk Space
+
+Note: For servers with less than 1GB RAM, the installer will automatically create a swap file to improve performance.
 
 ## Quick Installation
 

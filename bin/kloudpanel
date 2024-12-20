@@ -14,29 +14,34 @@ import mysql.connector
 import configparser
 import subprocess
 
-# Initialize Flask app
+# Initialize Flask app with minimal memory footprint
 app = Flask(__name__, 
     template_folder='/usr/local/kloudpanel/templates',
     static_folder='/usr/local/kloudpanel/www/static')
+
+# Disable debug mode to reduce memory usage
+app.debug = False
 
 # Load configuration
 config = configparser.ConfigParser()
 config.read('/usr/local/kloudpanel/config/panel.conf')
 
-# Setup logging
+# Configure logging to file instead of memory
 logging.basicConfig(
     filename=os.path.join(config['paths']['logs'], 'panel.log'),
-    level=logging.INFO,
+    level=logging.WARNING,  # Use WARNING instead of INFO to reduce log size
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-# Database connection
+# Use connection pooling for database to reduce memory usage
 def get_db():
     return mysql.connector.connect(
         host=config['database']['host'],
         user=config['database']['user'],
         password=config['database']['password'],
-        database=config['database']['name']
+        database=config['database']['name'],
+        pool_name='kloudpanel_pool',
+        pool_size=5
     )
 
 # Routes

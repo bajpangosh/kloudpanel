@@ -41,9 +41,21 @@ check_requirements() {
     
     # Check RAM
     TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
-    if [ "$TOTAL_RAM_MB" -lt 2048 ]; then
-        log_message "${RED}Minimum 2GB RAM required${NC}"
+    if [ "$TOTAL_RAM_MB" -lt 512 ]; then
+        log_message "${RED}Minimum 512MB RAM required${NC}"
         exit 1
+    fi
+    
+    # Create swap if RAM is less than 1GB
+    if [ "$TOTAL_RAM_MB" -lt 1024 ]; then
+        log_message "${YELLOW}Creating swap space for low memory system...${NC}"
+        # Create 1GB swap file
+        dd if=/dev/zero of=/swapfile bs=1024 count=1048576
+        chmod 600 /swapfile
+        mkswap /swapfile
+        swapon /swapfile
+        echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        log_message "${GREEN}Swap space created${NC}"
     fi
     
     # Check CPU cores
