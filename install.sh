@@ -34,8 +34,8 @@ check_requirements() {
     fi
     
     # Check OS
-    if [ ! -f /etc/os-release ] || ! grep -q "Ubuntu" /etc/os-release; then
-        log_message "${RED}This script requires Ubuntu${NC}"
+    if [ ! -f /etc/os-release ] || ! grep -q "Ubuntu 22.04" /etc/os-release; then
+        log_message "${RED}This script requires Ubuntu 22.04 LTS${NC}"
         exit 1
     fi
     
@@ -109,12 +109,26 @@ install_mariadb() {
     systemctl start mariadb
     systemctl enable mariadb
     
-    # Generate root password
+    # Generate passwords
     ROOT_PASS=$(openssl rand -base64 24)
+    PANEL_DB_PASS=$(openssl rand -base64 24)
+    
+    # Wait for MariaDB to be ready
+    sleep 5
+    
+    # Initialize MariaDB root password (Ubuntu 22.04 specific)
+    mysqladmin -u root password "${ROOT_PASS}"
+    
+    # Create .my.cnf for root access
+    cat > /root/.my.cnf << EOF
+[client]
+user=root
+password=${ROOT_PASS}
+EOF
+    chmod 600 /root/.my.cnf
     
     # Secure the installation
-    mysql -u root << EOF
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${ROOT_PASS}';
+    mysql --user=root --password="${ROOT_PASS}" << EOF
 DELETE FROM mysql.user WHERE User='';
 DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
 DROP DATABASE IF EXISTS test;
@@ -122,17 +136,26 @@ FLUSH PRIVILEGES;
 EOF
     
     # Create KloudPanel database and user
-    PANEL_DB_PASS=$(openssl rand -base64 24)
-    mysql -u root -p"${ROOT_PASS}" << EOF
+    mysql --user=root --password="${ROOT_PASS}" << EOF
 CREATE DATABASE IF NOT EXISTS kloudpanel;
 CREATE USER 'kloudpanel'@'localhost' IDENTIFIED BY '${PANEL_DB_PASS}';
 GRANT ALL PRIVILEGES ON kloudpanel.* TO 'kloudpanel'@'localhost';
 FLUSH PRIVILEGES;
 EOF
     
+    # Remove .my.cnf after setup
+    rm -f /root/.my.cnf
+    
     log_message "${GREEN}MariaDB installed successfully${NC}"
     log_message "Root password: $ROOT_PASS"
     log_message "Panel DB password: $PANEL_DB_PASS"
+    
+    # Store passwords in a secure file
+    cat > /usr/local/kloudpanel/config/db.conf << EOF
+ROOT_PASSWORD=${ROOT_PASS}
+PANEL_DB_PASSWORD=${PANEL_DB_PASS}
+EOF
+    chmod 600 /usr/local/kloudpanel/config/db.conf
 }
 
 # Install PHP
