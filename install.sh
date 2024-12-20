@@ -105,16 +105,34 @@ install_mariadb() {
     # Install MariaDB
     apt install -y mariadb-server mariadb-client
     
-    # Secure installation
+    # Start MariaDB service
+    systemctl start mariadb
+    systemctl enable mariadb
+    
+    # Generate root password
     ROOT_PASS=$(openssl rand -base64 24)
-    mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${ROOT_PASS}';"
-    mysql -e "DELETE FROM mysql.user WHERE User='';"
-    mysql -e "DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');"
-    mysql -e "DROP DATABASE IF EXISTS test;"
-    mysql -e "FLUSH PRIVILEGES;"
+    
+    # Secure the installation
+    mysql -u root << EOF
+ALTER USER 'root'@'localhost' IDENTIFIED BY '${ROOT_PASS}';
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+FLUSH PRIVILEGES;
+EOF
+    
+    # Create KloudPanel database and user
+    PANEL_DB_PASS=$(openssl rand -base64 24)
+    mysql -u root -p"${ROOT_PASS}" << EOF
+CREATE DATABASE IF NOT EXISTS kloudpanel;
+CREATE USER 'kloudpanel'@'localhost' IDENTIFIED BY '${PANEL_DB_PASS}';
+GRANT ALL PRIVILEGES ON kloudpanel.* TO 'kloudpanel'@'localhost';
+FLUSH PRIVILEGES;
+EOF
     
     log_message "${GREEN}MariaDB installed successfully${NC}"
     log_message "Root password: $ROOT_PASS"
+    log_message "Panel DB password: $PANEL_DB_PASS"
 }
 
 # Install PHP
@@ -154,6 +172,7 @@ ssl = true
 host = localhost
 port = 3306
 user = kloudpanel
+password = ${PANEL_DB_PASS}
 name = kloudpanel
 
 [paths]
