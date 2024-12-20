@@ -161,12 +161,20 @@ install_mariadb() {
     systemctl start mariadb
     systemctl enable mariadb
     
+    # Wait for MariaDB to be ready
+    sleep 5
+    
     # Generate passwords
     ROOT_PASS=$(openssl rand -base64 24)
     PANEL_DB_PASS=$(openssl rand -base64 24)
     
-    # Wait for MariaDB to be ready
-    sleep 5
+    # Store database credentials first
+    mkdir -p "$CONFIG_DIR"
+    cat > "$CONFIG_DIR/db.conf" << EOF
+ROOT_PASSWORD=${ROOT_PASS}
+PANEL_DB_PASSWORD=${PANEL_DB_PASS}
+EOF
+    chmod 600 "$CONFIG_DIR/db.conf"
     
     # Set root password for Ubuntu 22.04 MariaDB
     mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${ROOT_PASS}';"
@@ -197,13 +205,6 @@ EOF
     
     # Remove .my.cnf after setup
     rm -f /root/.my.cnf
-    
-    # Store database credentials
-    cat > "$CONFIG_DIR/db.conf" << EOF
-ROOT_PASSWORD=${ROOT_PASS}
-PANEL_DB_PASSWORD=${PANEL_DB_PASS}
-EOF
-    chmod 600 "$CONFIG_DIR/db.conf"
     
     log_message "${GREEN}MariaDB installed successfully${NC}"
     log_message "Root password: $ROOT_PASS"
@@ -315,6 +316,11 @@ main() {
     # Create directories first
     create_directories
     
+    # Ensure config directory exists and has proper permissions
+    mkdir -p "$CONFIG_DIR"
+    chown root:root "$CONFIG_DIR"
+    chmod 700 "$CONFIG_DIR"
+    
     # Then proceed with installation
     check_requirements
     install_base
@@ -323,6 +329,12 @@ main() {
     install_php
     setup_kloudpanel
     setup_firewall
+    
+    # Final permission check
+    chown -R nobody:nogroup "$PANEL_BASE"
+    chmod -R 755 "$PANEL_BASE"
+    chmod 700 "$CONFIG_DIR"
+    chmod 600 "$CONFIG_DIR"/*.conf
     
     echo "======================="
     echo "Installation Complete!"
