@@ -3,9 +3,9 @@
 # KloudPanel - LiteSpeed Hosting Control Panel Installation Script
 # Version: 1.0.0
 
-# Enable error handling
-set -e
-trap 'echo "Error occurred at line $LINENO. Exit code: $?"; exit 1' ERR
+# Enable strict error handling
+set -Eeuo pipefail
+trap 'error_handler $? $LINENO $BASH_LINENO "$BASH_COMMAND" $(printf "::%s" ${FUNCNAME[@]:-})' ERR
 
 # Color codes
 RED='\033[0;31m'
@@ -24,31 +24,261 @@ BIN_DIR="$PANEL_BASE/bin"
 # Log file
 LOG_FILE="/var/log/kloudpanel-install.log"
 
-# Create base directories
-create_directories() {
-    log_message "${YELLOW}Creating base directories...${NC}"
-    
-    # Create all required directories
-    mkdir -p "$CONFIG_DIR"
-    mkdir -p "$WWW_DIR"
-    mkdir -p "$LOGS_DIR"
-    mkdir -p "$TEMPLATES_DIR"
-    mkdir -p "$BIN_DIR"
-    
-    # Set proper permissions
-    chown -R nobody:nogroup "$PANEL_BASE"
-    chmod -R 755 "$PANEL_BASE"
-    
-    # Create log file with proper permissions
-    touch "$LOG_FILE"
-    chmod 644 "$LOG_FILE"
-    
-    log_message "${GREEN}Base directories created${NC}"
+# Error handler function
+error_handler() {
+    local exit_code=$1
+    local line_no=$2
+    local bash_lineno=$3
+    local last_command=$4
+    local func_stack=$5
+    log_message "${RED}Error occurred in:"
+    log_message "  Exit code: $exit_code"
+    log_message "  Line number: $line_no"
+    log_message "  Command: $last_command"
+    log_message "  Function stack: $func_stack${NC}"
+    exit $exit_code
+}
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to check if a service is running
+service_is_running() {
+    systemctl is-active --quiet "$1"
+}
+
+# Function to check if a port is available
+port_is_available() {
+    ! netstat -tuln | grep -q ":$1 "
 }
 
 # Function to log messages
 log_message() {
     echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+}
+
+# Create base directories
+create_directories() {
+    log_message "${YELLOW}Creating base directories...${NC}"
+    
+    # Create all required directories
+    for dir in "$CONFIG_DIR" "$WWW_DIR" "$LOGS_DIR" "$TEMPLATES_DIR" "$BIN_DIR"; do
+        if ! mkdir -p "$dir"; then
+            log_message "${RED}Failed to create directory: $dir${NC}"
+            return 1
+        fi
+    done
+    
+    # Set proper permissions
+    chown -R nobody:nogroup "$PANEL_BASE" || return 1
+    chmod -R 755 "$PANEL_BASE" || return 1
+    
+    # Create log file with proper permissions
+    touch "$LOG_FILE" || return 1
+    chmod 644 "$LOG_FILE" || return 1
+    
+    log_message "${GREEN}Base directories created successfully${NC}"
+}
+
+# Install base packages
+install_base() {
+    log_message "${YELLOW}Installing base packages...${NC}"
+    
+    # Check if apt is available
+    if ! command_exists apt; then
+        log_message "${RED}apt package manager not found${NC}"
+        return 1
+    }
+    
+    # Update package lists
+    apt update || return 1
+    
+    # Install Python 3.10 (Ubuntu 22.04 default)
+    DEBIAN_FRONTEND=noninteractive apt install -y python3.10 python3.10-venv python3-pip || return 1
+    
+    # Install required packages for Ubuntu 22.04
+    DEBIAN_FRONTEND=noninteractive apt install -y wget curl software-properties-common \
+        apt-transport-https ca-certificates gnupg lsb-release redis-server acl \
+        openssl net-tools ufw || return 1
+    
+    log_message "${GREEN}Base packages installed successfully${NC}"
+}
+
+# Install OpenLiteSpeed
+install_litespeed() {
+    log_message "${YELLOW}Installing OpenLiteSpeed...${NC}"
+    
+    # Check if port 8088 is available
+    if ! port_is_available 8088; then
+        log_message "${RED}Port 8088 is already in use${NC}"
+        return 1
+    fi
+    
+    # Remove any existing repository
+    rm -f /etc/apt/sources.list.d/litespeed.list
+    
+    # Add OpenLiteSpeed repository
+    if ! wget -O - https://repo.litespeed.sh | bash; then
+        log_message "${RED}Failed to add OpenLiteSpeed repository${NC}"
+        return 1
+    fi
+    
+    # Update package lists
+    apt update || return 1
+    
+    # Install OpenLiteSpeed
+    DEBIAN_FRONTEND=noninteractive apt install -y openlitespeed || return 1
+    
+    # Set admin password
+    ADMIN_PASS=$(openssl rand -base64 12)
+    if ! echo "admin:$(openssl passwd -apr1 $ADMIN_PASS)" > /usr/local/lsws/admin/conf/htpasswd; then
+        log_message "${RED}Failed to set admin password${NC}"
+        return 1
+    fi
+    
+    # Set proper permissions
+    chown -R nobody:nogroup /usr/local/lsws/admin/conf/htpasswd || return 1
+    chmod 600 /usr/local/lsws/admin/conf/htpasswd || return 1
+    
+    # Start OpenLiteSpeed service
+    systemctl start litespeed || return 1
+    systemctl enable litespeed || return 1
+    
+    # Verify service is running
+    if ! service_is_running litespeed; then
+        log_message "${RED}OpenLiteSpeed service failed to start${NC}"
+        return 1
+    fi
+    
+    log_message "${GREEN}OpenLiteSpeed installed successfully${NC}"
+    log_message "Admin username: admin"
+    log_message "Admin password: $ADMIN_PASS"
+}
+
+# Install MariaDB
+install_mariadb() {
+    log_message "${YELLOW}Installing MariaDB...${NC}"
+    
+    # Check if port 3306 is available
+    if ! port_is_available 3306; then
+        log_message "${RED}Port 3306 is already in use${NC}"
+        return 1
+    fi
+    
+    # Install MariaDB
+    DEBIAN_FRONTEND=noninteractive apt install -y mariadb-server mariadb-client || return 1
+    
+    # Start MariaDB service
+    systemctl start mariadb || return 1
+    systemctl enable mariadb || return 1
+    
+    # Verify service is running
+    if ! service_is_running mariadb; then
+        log_message "${RED}MariaDB service failed to start${NC}"
+        return 1
+    fi
+    
+    # Wait for MariaDB to be ready
+    sleep 5
+    
+    # Generate passwords
+    ROOT_PASS=$(openssl rand -base64 24)
+    PANEL_DB_PASS=$(openssl rand -base64 24)
+    
+    # Store database credentials first
+    mkdir -p "$CONFIG_DIR"
+    if ! cat > "$CONFIG_DIR/db.conf" << EOF
+ROOT_PASSWORD=${ROOT_PASS}
+PANEL_DB_PASSWORD=${PANEL_DB_PASS}
+EOF
+    then
+        log_message "${RED}Failed to store database credentials${NC}"
+        return 1
+    fi
+    chmod 600 "$CONFIG_DIR/db.conf" || return 1
+    
+    # Set root password
+    if ! mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${ROOT_PASS}';"; then
+        log_message "${RED}Failed to set root password${NC}"
+        return 1
+    fi
+    
+    # Create .my.cnf for root access
+    if ! cat > /root/.my.cnf << EOF
+[client]
+user=root
+password=${ROOT_PASS}
+EOF
+    then
+        log_message "${RED}Failed to create .my.cnf${NC}"
+        return 1
+    fi
+    chmod 600 /root/.my.cnf || return 1
+    
+    # Secure the installation
+    if ! mysql --user=root --password="${ROOT_PASS}" << EOF
+DELETE FROM mysql.user WHERE User='';
+DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
+DROP DATABASE IF EXISTS test;
+FLUSH PRIVILEGES;
+EOF
+    then
+        log_message "${RED}Failed to secure MariaDB installation${NC}"
+        return 1
+    fi
+    
+    # Create KloudPanel database and user
+    if ! mysql --user=root --password="${ROOT_PASS}" << EOF
+CREATE DATABASE IF NOT EXISTS kloudpanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'kloudpanel'@'localhost' IDENTIFIED BY '${PANEL_DB_PASS}';
+GRANT ALL PRIVILEGES ON kloudpanel.* TO 'kloudpanel'@'localhost';
+FLUSH PRIVILEGES;
+EOF
+    then
+        log_message "${RED}Failed to create KloudPanel database and user${NC}"
+        return 1
+    fi
+    
+    # Remove .my.cnf after setup
+    rm -f /root/.my.cnf
+    
+    log_message "${GREEN}MariaDB installed successfully${NC}"
+    log_message "Root password: $ROOT_PASS"
+    log_message "Panel DB password: $PANEL_DB_PASS"
+}
+
+# Install PHP
+install_php() {
+    log_message "${YELLOW}Installing PHP...${NC}"
+    
+    # Install PHP packages
+    DEBIAN_FRONTEND=noninteractive apt install -y \
+        lsphp81 lsphp81-common lsphp81-mysql lsphp81-opcache \
+        lsphp81-curl lsphp81-json lsphp81-xml lsphp81-zip lsphp81-redis \
+        lsphp81-imagick lsphp81-intl lsphp81-gd lsphp81-cli || return 1
+    
+    # Create symbolic link
+    ln -sf /usr/local/lsws/lsphp81/bin/lsphp /usr/local/lsws/fcgi-bin/lsphp || return 1
+    
+    # Set PHP timezone
+    if ! sed -i "s|;date.timezone =|date.timezone = $(cat /etc/timezone)|" \
+        /usr/local/lsws/lsphp81/etc/php/8.1/litespeed/php.ini; then
+        log_message "${RED}Failed to set PHP timezone${NC}"
+        return 1
+    fi
+    
+    # Restart OpenLiteSpeed
+    systemctl restart litespeed || return 1
+    
+    # Verify PHP installation
+    if ! /usr/local/lsws/lsphp81/bin/php -v > /dev/null; then
+        log_message "${RED}PHP installation verification failed${NC}"
+        return 1
+    fi
+    
+    log_message "${GREEN}PHP installed successfully${NC}"
 }
 
 # Check system requirements
@@ -99,139 +329,6 @@ check_requirements() {
     log_message "${GREEN}System requirements check passed${NC}"
 }
 
-# Install base packages
-install_base() {
-    log_message "${YELLOW}Installing base packages...${NC}"
-    
-    # Update package lists
-    apt update
-    
-    # Install Python 3.10 (Ubuntu 22.04 default)
-    apt install -y python3.10 python3.10-venv python3-pip
-    
-    # Install required packages for Ubuntu 22.04
-    apt install -y wget curl software-properties-common apt-transport-https \
-        ca-certificates gnupg lsb-release redis-server acl \
-        openssl net-tools ufw
-    
-    log_message "${GREEN}Base packages installed${NC}"
-}
-
-# Install OpenLiteSpeed
-install_litespeed() {
-    log_message "${YELLOW}Installing OpenLiteSpeed...${NC}"
-    
-    # Remove any existing repository
-    rm -f /etc/apt/sources.list.d/litespeed.list
-    
-    # Add OpenLiteSpeed repository for Ubuntu 22.04
-    wget -O - https://repo.litespeed.sh | bash
-    
-    # Update package lists
-    apt update
-    
-    # Install OpenLiteSpeed
-    apt install -y openlitespeed
-    
-    # Set admin password
-    ADMIN_PASS=$(openssl rand -base64 12)
-    echo "admin:$(openssl passwd -apr1 $ADMIN_PASS)" > /usr/local/lsws/admin/conf/htpasswd
-    
-    # Set proper permissions for Ubuntu 22.04
-    chown -R nobody:nogroup /usr/local/lsws/admin/conf/htpasswd
-    chmod 600 /usr/local/lsws/admin/conf/htpasswd
-    
-    # Start and enable service
-    systemctl start lsws
-    systemctl enable lsws
-    
-    log_message "${GREEN}OpenLiteSpeed installed successfully${NC}"
-    log_message "Admin username: admin"
-    log_message "Admin password: $ADMIN_PASS"
-}
-
-# Install MariaDB
-install_mariadb() {
-    log_message "${YELLOW}Installing MariaDB...${NC}"
-    
-    # Install MariaDB (Ubuntu 22.04 repository version)
-    apt install -y mariadb-server mariadb-client
-    
-    # Start MariaDB service
-    systemctl start mariadb
-    systemctl enable mariadb
-    
-    # Wait for MariaDB to be ready
-    sleep 5
-    
-    # Generate passwords
-    ROOT_PASS=$(openssl rand -base64 24)
-    PANEL_DB_PASS=$(openssl rand -base64 24)
-    
-    # Store database credentials first
-    mkdir -p "$CONFIG_DIR"
-    cat > "$CONFIG_DIR/db.conf" << EOF
-ROOT_PASSWORD=${ROOT_PASS}
-PANEL_DB_PASSWORD=${PANEL_DB_PASS}
-EOF
-    chmod 600 "$CONFIG_DIR/db.conf"
-    
-    # Set root password for Ubuntu 22.04 MariaDB
-    mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${ROOT_PASS}';"
-    
-    # Create .my.cnf for root access
-    cat > /root/.my.cnf << EOF
-[client]
-user=root
-password=${ROOT_PASS}
-EOF
-    chmod 600 /root/.my.cnf
-    
-    # Secure the installation
-    mysql --user=root --password="${ROOT_PASS}" << EOF
-DELETE FROM mysql.user WHERE User='';
-DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-DROP DATABASE IF EXISTS test;
-FLUSH PRIVILEGES;
-EOF
-    
-    # Create KloudPanel database and user
-    mysql --user=root --password="${ROOT_PASS}" << EOF
-CREATE DATABASE IF NOT EXISTS kloudpanel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS 'kloudpanel'@'localhost' IDENTIFIED BY '${PANEL_DB_PASS}';
-GRANT ALL PRIVILEGES ON kloudpanel.* TO 'kloudpanel'@'localhost';
-FLUSH PRIVILEGES;
-EOF
-    
-    # Remove .my.cnf after setup
-    rm -f /root/.my.cnf
-    
-    log_message "${GREEN}MariaDB installed successfully${NC}"
-    log_message "Root password: $ROOT_PASS"
-    log_message "Panel DB password: $PANEL_DB_PASS"
-}
-
-# Install PHP
-install_php() {
-    log_message "${YELLOW}Installing PHP...${NC}"
-    
-    # Install PHP 8.1 (Ubuntu 22.04 compatible version)
-    apt install -y lsphp81 lsphp81-common lsphp81-mysql lsphp81-opcache \
-        lsphp81-curl lsphp81-json lsphp81-xml lsphp81-zip lsphp81-redis \
-        lsphp81-imagick lsphp81-intl lsphp81-gd lsphp81-cli
-    
-    # Create symbolic link
-    ln -sf /usr/local/lsws/lsphp81/bin/lsphp /usr/local/lsws/fcgi-bin/lsphp
-    
-    # Set PHP timezone
-    sed -i "s|;date.timezone =|date.timezone = $(cat /etc/timezone)|" /usr/local/lsws/lsphp81/etc/php/8.1/litespeed/php.ini
-    
-    # Restart OpenLiteSpeed
-    systemctl restart lsws
-    
-    log_message "${GREEN}PHP installed successfully${NC}"
-}
-
 # Setup KloudPanel
 setup_kloudpanel() {
     log_message "${YELLOW}Setting up KloudPanel...${NC}"
@@ -260,8 +357,8 @@ EOF
     cat > /etc/systemd/system/kloudpanel.service << EOF
 [Unit]
 Description=KloudPanel LiteSpeed Control Panel
-After=network.target mariadb.service lsws.service
-Requires=mariadb.service lsws.service
+After=network.target mariadb.service litespeed.service
+Requires=mariadb.service litespeed.service
 
 [Service]
 Type=simple
@@ -313,28 +410,34 @@ main() {
     echo "KloudPanel Installation"
     echo "======================="
     
+    # Check if running as root
+    if [ "$EUID" -ne 0 ]; then
+        log_message "${RED}Please run as root${NC}"
+        exit 1
+    fi
+    
     # Create directories first
-    create_directories
+    create_directories || exit 1
     
     # Ensure config directory exists and has proper permissions
-    mkdir -p "$CONFIG_DIR"
-    chown root:root "$CONFIG_DIR"
-    chmod 700 "$CONFIG_DIR"
+    mkdir -p "$CONFIG_DIR" || exit 1
+    chown root:root "$CONFIG_DIR" || exit 1
+    chmod 700 "$CONFIG_DIR" || exit 1
     
-    # Then proceed with installation
-    check_requirements
-    install_base
-    install_litespeed
-    install_mariadb
-    install_php
-    setup_kloudpanel
-    setup_firewall
+    # Run installation steps
+    check_requirements || exit 1
+    install_base || exit 1
+    install_litespeed || exit 1
+    install_mariadb || exit 1
+    install_php || exit 1
+    setup_kloudpanel || exit 1
+    setup_firewall || exit 1
     
     # Final permission check
-    chown -R nobody:nogroup "$PANEL_BASE"
-    chmod -R 755 "$PANEL_BASE"
-    chmod 700 "$CONFIG_DIR"
-    chmod 600 "$CONFIG_DIR"/*.conf
+    chown -R nobody:nogroup "$PANEL_BASE" || exit 1
+    chmod -R 755 "$PANEL_BASE" || exit 1
+    chmod 700 "$CONFIG_DIR" || exit 1
+    chmod 600 "$CONFIG_DIR"/*.conf || exit 1
     
     echo "======================="
     echo "Installation Complete!"
