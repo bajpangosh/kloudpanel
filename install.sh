@@ -136,7 +136,7 @@ setup_kloudpanel() {
     cat > /usr/local/kloudpanel/config/panel.conf << EOF
 [panel]
 version = 1.0.0
-port = 8090
+port = 8443
 ssl = true
 
 [database]
@@ -185,7 +185,7 @@ setup_firewall() {
     ufw allow 80/tcp
     ufw allow 443/tcp
     ufw allow 7080/tcp  # OpenLiteSpeed Admin
-    ufw allow 8090/tcp  # KloudPanel
+    ufw allow 8443/tcp  # KloudPanel
     
     echo "y" | ufw enable
     
@@ -209,7 +209,7 @@ main() {
     echo "======================="
     echo "Installation Complete!"
     echo "======================="
-    echo "KloudPanel URL: https://$(hostname -I | awk '{print $1}'):8090"
+    echo "KloudPanel URL: https://$(hostname -I | awk '{print $1}'):8443"
     echo "OpenLiteSpeed Admin URL: https://$(hostname -I | awk '{print $1}'):7080"
     echo "Admin username: admin"
     echo "Admin password: $ADMIN_PASS"
