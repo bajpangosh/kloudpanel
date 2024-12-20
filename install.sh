@@ -34,12 +34,12 @@ check_requirements() {
     fi
     
     # Check OS
-    if [ ! -f /etc/os-release ] || ! grep -q "Ubuntu 22.04" /etc/os-release; then
-        log_message "${RED}This script requires Ubuntu 22.04 LTS${NC}"
+    if [ ! -f /etc/os-release ] || ! grep -q "Ubuntu" /etc/os-release; then
+        log_message "${RED}This script requires Ubuntu${NC}"
         exit 1
     fi
     
-    # Check RAM
+    # Check RAM and create swap if needed
     TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
     if [ "$TOTAL_RAM_MB" -lt 512 ]; then
         log_message "${RED}Minimum 512MB RAM required${NC}"
@@ -49,20 +49,23 @@ check_requirements() {
     # Create swap if RAM is less than 1GB
     if [ "$TOTAL_RAM_MB" -lt 1024 ]; then
         log_message "${YELLOW}Creating swap space for low memory system...${NC}"
+        
+        # Remove existing swap file if it exists
+        swapoff /swapfile 2>/dev/null || true
+        rm -f /swapfile 2>/dev/null || true
+        
         # Create 1GB swap file
-        dd if=/dev/zero of=/swapfile bs=1024 count=1048576
+        dd if=/dev/zero of=/swapfile bs=1M count=1024
         chmod 600 /swapfile
         mkswap /swapfile
         swapon /swapfile
-        echo '/swapfile none swap sw 0 0' >> /etc/fstab
-        log_message "${GREEN}Swap space created${NC}"
-    fi
-    
-    # Check CPU cores
-    CPU_CORES=$(nproc)
-    if [ "$CPU_CORES" -lt 2 ]; then
-        log_message "${RED}Minimum 2 CPU cores required${NC}"
-        exit 1
+        
+        # Add to fstab if not already there
+        if ! grep -q "/swapfile" /etc/fstab; then
+            echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        fi
+        
+        log_message "${GREEN}Swap space created successfully${NC}"
     fi
     
     log_message "${GREEN}System requirements check passed${NC}"
@@ -98,10 +101,6 @@ install_litespeed() {
 # Install MariaDB
 install_mariadb() {
     log_message "${YELLOW}Installing MariaDB...${NC}"
-    
-    # Add MariaDB repository
-    curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup | \
-        bash -s -- --mariadb-server-version=10.6
     
     # Install MariaDB
     apt install -y mariadb-server mariadb-client
