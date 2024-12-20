@@ -95,13 +95,22 @@ install_base() {
 install_mysql() {
     log_message "${YELLOW}Installing MySQL 5.7...${NC}"
     
+    # Add MySQL repository key
+    log_message "Adding MySQL repository key..."
+    curl -fsSL https://repo.mysql.com/RPM-GPG-KEY-mysql-2022 | gpg --dearmor -o /usr/share/keyrings/mysql.gpg
+    
     # Add MySQL 5.7 repository
-    wget https://dev.mysql.com/get/mysql-apt-config_0.8.12-1_all.deb
-    DEBIAN_FRONTEND=noninteractive dpkg -i mysql-apt-config_0.8.12-1_all.deb
+    echo "deb [signed-by=/usr/share/keyrings/mysql.gpg] http://repo.mysql.com/apt/ubuntu jammy mysql-5.7" | tee /etc/apt/sources.list.d/mysql.list
+    
+    # Update package lists
     apt update
     
     # Install MySQL 5.7
-    DEBIAN_FRONTEND=noninteractive apt install -y mysql-server
+    DEBIAN_FRONTEND=noninteractive apt install -y mysql-server mysql-client
+    
+    # Start MySQL service
+    systemctl start mysql
+    systemctl enable mysql
     
     # Generate root password
     DB_ROOT_PASS=$(openssl rand -base64 24)
@@ -110,6 +119,14 @@ install_mysql() {
     echo "ROOT_PASSWORD=${DB_ROOT_PASS}" > "$CONFIG_DIR/db.conf"
     chmod 600 "$CONFIG_DIR/db.conf"
     
+    # Create temporary MySQL config
+    cat > /root/.my.cnf << EOF
+[client]
+user=root
+password=${DB_ROOT_PASS}
+EOF
+    chmod 600 /root/.my.cnf
+    
     # Secure MySQL installation
     mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '${DB_ROOT_PASS}';"
     mysql -u root -p"${DB_ROOT_PASS}" -e "DELETE FROM mysql.user WHERE User='';"
@@ -117,7 +134,11 @@ install_mysql() {
     mysql -u root -p"${DB_ROOT_PASS}" -e "DROP DATABASE IF EXISTS test;"
     mysql -u root -p"${DB_ROOT_PASS}" -e "FLUSH PRIVILEGES;"
     
-    log_message "${GREEN}MySQL installed successfully${NC}"
+    # Remove temporary MySQL config
+    rm -f /root/.my.cnf
+    
+    log_message "${GREEN}MySQL 5.7 installed successfully${NC}"
+    log_message "Root password: $DB_ROOT_PASS"
 }
 
 # Install OpenLiteSpeed

@@ -8,7 +8,7 @@ A lightweight web hosting control panel specifically designed for WordPress host
 - ⚡ OpenLiteSpeed Web Server
 - 🔒 Free SSL Certificates
 - 📊 Simple Dashboard
-- 💽 MySQL Database Management
+- 💽 MySQL 5.7 Database Management
 - 🔑 User Management
 
 ## System Requirements
