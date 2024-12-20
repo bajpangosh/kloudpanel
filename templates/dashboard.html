@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KloudPanel - LiteSpeed Control Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <div class="min-h-screen flex">
+        <!-- Sidebar -->
+        <div class="w-64 bg-white shadow-lg">
+            <div class="p-6">
+                <h1 class="text-2xl font-bold text-gray-800">KloudPanel</h1>
+            </div>
+            <nav class="mt-6">
+                <a href="/" class="flex items-center px-6 py-3 text-gray-700 bg-gray-100">
+                    Dashboard
+                </a>
+                <a href="/sites" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-100">
+                    Sites
+                </a>
+                <a href="/ssl" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-100">
+                    SSL Certificates
+                </a>
+                <a href="/settings" class="flex items-center px-6 py-3 text-gray-600 hover:bg-gray-100">
+                    Settings
+                </a>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 p-8">
+            <!-- Header -->
+            <header class="flex justify-between items-center mb-8">
+                <h2 class="text-3xl font-bold text-gray-800">Dashboard</h2>
+                <button onclick="createSite()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                    Create Site
+                </button>
+            </header>
+
+            <!-- Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-sm font-medium text-gray-500">CPU Usage</h3>
+                    <p id="cpuUsage" class="text-2xl font-semibold text-gray-800">0%</p>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-sm font-medium text-gray-500">Memory Usage</h3>
+                    <p id="memoryUsage" class="text-2xl font-semibold text-gray-800">0%</p>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-sm font-medium text-gray-500">Total Sites</h3>
+                    <p id="totalSites" class="text-2xl font-semibold text-gray-800">0</p>
+                </div>
+            </div>
+
+            <!-- Sites List -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-medium text-gray-800">Sites</h3>
+                </div>
+                <div class="p-6">
+                    <table class="w-full" id="sitesTable">
+                        <thead>
+                            <tr class="text-left text-gray-500">
+                                <th class="pb-4">Domain</th>
+                                <th class="pb-4">SSL Status</th>
+                                <th class="pb-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sitesList"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Fetch stats every 30 seconds
+        function updateStats() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('cpuUsage').textContent = data.cpu.toFixed(1) + '%';
+                    document.getElementById('memoryUsage').textContent = data.memory.toFixed(1) + '%';
+                    document.getElementById('totalSites').textContent = data.sites;
+                });
+        }
+
+        // Fetch sites list
+        function updateSites() {
+            fetch('/api/sites')
+                .then(response => response.json())
+                .then(sites => {
+                    const sitesList = document.getElementById('sitesList');
+                    sitesList.innerHTML = '';
+                    
+                    sites.forEach(site => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td class="py-4">${site}</td>
+                            <td class="py-4">
+                                <span class="px-2 py-1 text-sm rounded-full bg-gray-100">
+                                    Check SSL
+                                </span>
+                            </td>
+                            <td class="py-4">
+                                <button onclick="manageSite('${site}')" class="text-blue-500 hover:text-blue-700">
+                                    Manage
+                                </button>
+                            </td>
+                        `;
+                        sitesList.appendChild(row);
+                    });
+                });
+        }
+
+        // Create new site
+        function createSite() {
+            const domain = prompt('Enter domain name:');
+            if (domain) {
+                fetch('/api/sites', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ domain: domain }),
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Site created successfully!');
+                        updateSites();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                });
+            }
+        }
+
+        // Initialize
+        updateStats();
+        updateSites();
+        setInterval(updateStats, 30000);
+    </script>
+</body>
+</html>
